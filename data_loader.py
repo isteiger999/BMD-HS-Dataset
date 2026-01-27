@@ -64,3 +64,25 @@ def loaders(X_train, y_train, X_val, y_val, X_test, y_test):
     test_loader = DataLoader(test_ds, batch_size=10, shuffle=False)
 
     return train_loader, val_loader, test_loader
+
+def calc_mean_std(list):
+    # Calculate mean
+    length = len(list)
+    mean = sum(list) / length
+
+    # Calculate variance
+    squared_diffs = [(x - mean) ** 2 for x in list]
+    variance = sum(squared_diffs) / length
+    std = np.sqrt(variance)
+
+    return mean, std
+
+def mean_std(metrics):
+    list_loss = metrics["Final_loss"]
+    list_acc = metrics["Acc"]
+
+    mu_loss, std_loss = calc_mean_std(list_loss)
+    mu_acc, std_acc = calc_mean_std(list_acc)
+
+    print(f"Final Loss: {mu_loss}\u00B1{std_loss}")
+    print(f"Final Acc: {mu_acc}\u00B1{std_acc}")
