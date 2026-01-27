@@ -1,5 +1,4 @@
 import torch
-
 from data_loader import load_data_simple, split_data, loaders, mean_std
 from models.ANN import ANN, train_ann, test_ann
 
