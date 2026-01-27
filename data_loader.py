@@ -2,6 +2,7 @@ import torch
 import pandas as pd
 import numpy as np
 import math
+from torch.utils.data import DataLoader, TensorDataset
 
 def number(df_x):
     map_gender = {'M': 0, 'F': 1} 
@@ -47,9 +48,19 @@ def split_data(X, y, iteration, stride, split):
     y2 = torch.concat([y, y], dim=0) 
 
     fract_train, fract_val, fract_test, stride  = calc_fraction(X, stride, split)
-    print(f"{fract_train, fract_val, fract_test, stride}")
     X_train, y_train = X2[iteration*stride:(fract_train+iteration*stride), :], y2[iteration*stride:(fract_train+iteration*stride), :]
     X_val, y_val = X2[(fract_train+iteration*stride):(fract_train+iteration*stride+fract_val), :], y2[(fract_train+iteration*stride):(fract_train+iteration*stride+fract_val), :]
     X_test, y_test = X2[(fract_train+iteration*stride+fract_val):(fract_train+iteration*stride+fract_val+fract_test), :], y2[(fract_train+iteration*stride+fract_val):(fract_train+iteration*stride+fract_val+fract_test), :]
 
     return X_train, y_train, X_val, y_val, X_test, y_test
+
+def loaders(X_train, y_train, X_val, y_val, X_test, y_test):
+    train_ds = TensorDataset(X_train.float(), y_train.squeeze())
+    val_ds = TensorDataset(X_val.float(), y_val.squeeze())
+    test_ds = TensorDataset(X_test.float(), y_test.squeeze())
+    
+    train_loader = DataLoader(train_ds, batch_size=10, shuffle=True)
+    val_loader = DataLoader(val_ds, batch_size=10, shuffle=False)
+    test_loader = DataLoader(test_ds, batch_size=10, shuffle=False)
+
+    return train_loader, val_loader, test_loader
