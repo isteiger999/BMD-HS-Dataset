@@ -110,7 +110,6 @@ def load_pcg_data(device):
 
     train_csv = pd.read_csv('data/train.csv')
     train = train_csv.to_numpy()
-    count = 0
 
     for row in range(train_csv.shape[0]):
         for index, file_name in enumerate(train_csv.iloc[row, 6:]):
@@ -123,7 +122,5 @@ def load_pcg_data(device):
         labels = torch.tensor(labels.astype(float), dtype=torch.float32)
         labels = labels.view(1, -1)
         y[row, :] = labels
-
-    print(f"Final Count: {count}")
 
     return X, y

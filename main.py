@@ -1,6 +1,7 @@
 import torch
 from data_loader import load_data_simple, split_data, loaders, mean_std, load_pcg_data
 from models.ANN import ANN, train_ann, test_ann
+from models.transformer import Transformer, train_transformer
 
 def main():
     device = torch.device("mps" if torch.mps.is_available() else "cpu")
@@ -10,15 +11,14 @@ def main():
     X, y = load_pcg_data(device)
 
     iterations = 5
-    stride = 1/iterations
+    stride_splits = 1/iterations
 
     for iteration in range(iterations):
-        X_train, y_train, X_val, y_val, X_test, y_test = split_data(X, y, iteration, stride, split=[0.70, 0.15, 0.15])
+        X_train, y_train, X_val, y_val, X_test, y_test = split_data(X, y, iteration, stride_splits, split=[0.70, 0.15, 0.15])
         train_loader, val_loader, test_loader = loaders(X_train, y_train, X_val, y_val, X_test, y_test)
-        print(X_train.shape)
-        print(y_train.shape)
-        print(X_val.shape)
-        print(y_val.shape)
+        
+        transformer = Transformer().to(device)
+        train_transformer(transformer, train_loader, val_loader, device, epochs = 150)
         '''
         ann = ANN().to(device)
         train_ann(ann, device, train_loader, val_loader)
