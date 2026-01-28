@@ -3,6 +3,8 @@ import pandas as pd
 import numpy as np
 import math
 from torch.utils.data import DataLoader, TensorDataset
+import librosa
+import matplotlib.pyplot as plt
 
 def number(df_x):
     map_gender = {'M': 0, 'F': 1} 
@@ -17,7 +19,7 @@ def number(df_x):
         
     return df_x
 
-def load_data_simple():
+def load_data_simple():     
     df_x = pd.read_csv(r"data/additional_metadata.csv")
     df_y = pd.read_csv(r"data/train.csv")
 
@@ -28,6 +30,9 @@ def load_data_simple():
 
     X, y = torch.tensor(np.array(df_x), dtype=torch.float32), torch.tensor(np.array(df_y), dtype=torch.float32) 
     
+    # X.shape = 108, 4
+    # y.shape = 108, 5
+
     return X, y
 
 def calc_fraction(X, stride, split):
@@ -86,3 +91,39 @@ def mean_std(metrics):
 
     print(f"Final Loss: {mu_loss}\u00B1{std_loss}")
     print(f"Final Acc: {mu_acc}\u00B1{std_acc}")
+
+
+# ----------------------------
+
+def fix_length(wav_file):
+    if wav_file.shape[0] < 80000:
+        diff = 80000-wav_file.shape[0]
+        wav_file = np.pad(wav_file, (0, diff), mode='edge')
+    else: 
+        wav_file = wav_file[:80000]
+    
+    return wav_file
+
+def load_pcg_data(device):
+    X = torch.zeros([108, 8, 80000], dtype=torch.float32, device=device)
+    y = torch.zeros([108, 5], dtype=torch.float32, device=device)
+
+    train_csv = pd.read_csv('data/train.csv')
+    train = train_csv.to_numpy()
+    count = 0
+
+    for row in range(train_csv.shape[0]):
+        for index, file_name in enumerate(train_csv.iloc[row, 6:]):
+            wav_file, _ = librosa.load(f'data/train/{file_name}.wav', sr=4000)
+            if wav_file.shape[0] != 80000:
+                wav_file = fix_length(wav_file)
+            X[row, index, :] = torch.tensor(wav_file)
+        
+        labels = train[row, 1:6]
+        labels = torch.tensor(labels.astype(float), dtype=torch.float32)
+        labels = labels.view(1, -1)
+        y[row, :] = labels
+
+    print(f"Final Count: {count}")
+
+    return X, y
