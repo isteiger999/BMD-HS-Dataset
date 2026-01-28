@@ -48,7 +48,7 @@ def calc_fraction(X, stride, split):
         residue = X.shape[0] - fract_train
         fract_val, fract_test = residue/2, residue/2
         return int(fract_train), int(fract_val), int(fract_test), int(stride)
-    
+ 
 def split_data(X, y, iteration, stride, split):
     X2 = torch.concat([X, X], dim=0)
     y2 = torch.concat([y, y], dim=0) 
@@ -146,3 +146,7 @@ def load_pcg_data(device, win_len, stride):
         y[row, :] = labels
 
     return X, y, nr_windows
+
+
+
+

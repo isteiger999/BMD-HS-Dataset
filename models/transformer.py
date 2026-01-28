@@ -6,13 +6,13 @@ import math
 import copy
 
 num_channels = 8
-embed_dim = 64
+embed_dim = 32
 kernel_size = 100 # 4000 = 1sec
 stride = kernel_size//4
 num_classes = 5
 attention_heads = 4
-transformer_blocks = 2 
-mlp_nodes = 256
+transformer_blocks = 1
+mlp_nodes = 128
 
 class PatchEmbedding(nn.Module):
     def __init__(self, nr_windows):
@@ -88,7 +88,8 @@ class Transformer(nn.Module):
 
 def train_transformer(transformer, train_loader, val_loader, device, epochs = 150):
     optimizer = optim.Adam(transformer.parameters(), lr = 5e-4, weight_decay=1e-3)
-    criterion_train = nn.BCEWithLogitsLoss()
+    weights = torch.tensor([0.1795, 0.1545, 0.1748, 0.1748, 0.3161]).to(device)
+    criterion_train = nn.BCEWithLogitsLoss(weight=weights)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=5, factor=0.5, min_lr=5e-6)
 
     # for early stopping
@@ -114,8 +115,9 @@ def train_transformer(transformer, train_loader, val_loader, device, epochs = 15
             y_pred = torch.sigmoid(preds)
             y_pred = (y_pred > 0.5).int()
             for row in range(x.shape[0]):
-                if torch.equal(y_pred[row, :], y[row, :]):
-                    correct_train += 1
+                #if torch.equal(y_pred[row, :], y[row, :]):
+                    #correct_train += 1
+                correct_train += (y_pred == y).float().mean().item()
 
 
         train_loss /= total_train
@@ -137,8 +139,9 @@ def train_transformer(transformer, train_loader, val_loader, device, epochs = 15
                 
                 total_val += xv.shape[0]
                 for row in range(xv.shape[0]):
-                    if torch.equal(y_pred[row, :], yv[row, :]):
-                        correct_val += 1
+                    #if torch.equal(y_pred[row, :], yv[row, :]):
+                        #correct_val += 1
+                    correct_val += (y_pred == yv).float().mean().item()
                     
         val_loss /= total_val
         val_acc = correct_val / total_val
@@ -175,8 +178,9 @@ def test_transformer(transformer, val_loader, device, metrics):
             
             total_val += xv.shape[0]
             for row in range(xv.shape[0]):
-                if torch.equal(y_pred[row, :], yv[row, :]):
-                    correct_val += 1
+                #if torch.equal(y_pred[row, :], yv[row, :]):
+                    #correct_val += 1
+                correct_val += (y_pred==yv).float().mean().item()
                 
     val_loss /= total_val
     val_acc = correct_val / total_val
