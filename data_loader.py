@@ -112,25 +112,37 @@ def filter(wav_file):
     output = torch.tensor(output_copy)
     return output
 
-def load_pcg_data(device):
-    X = torch.zeros([108, 8, 80000], dtype=torch.float32, device=device)
+def window_split(X, wav_file, win_len, stride, nr_windows, row, index_file):
+    wav_file = torch.tensor(wav_file)
+    for window in range(nr_windows):
+        X[row, index_file*nr_windows+window, :] = wav_file[window*stride:window*stride + win_len]
+    
+    return X
+
+def load_pcg_data(device, win_len, stride):
+
+    len_rec = 80000
+    nr_channels = 8
+    nr_windows = (len_rec - win_len) // stride + 1
+
+    X = torch.zeros([108, nr_channels*nr_windows, win_len], dtype=torch.float32, device=device)
     y = torch.zeros([108, 5], dtype=torch.float32, device=device)
 
     train_csv = pd.read_csv('data/train.csv')
     train = train_csv.to_numpy()
 
     for row in range(train_csv.shape[0]):
-        for index, file_name in enumerate(train_csv.iloc[row, 6:]):
+        for index_file, file_name in enumerate(train_csv.iloc[row, 6:]):
             wav_file, _ = librosa.load(f'data/train/{file_name}.wav', sr=4000)
             if wav_file.shape[0] != 80000:
                 wav_file = fix_length(wav_file)
 
             #wav_file_filtered = filter(wav_file)    
-            X[row, index, :] = wav_file
+            X = window_split(X, wav_file, win_len, stride, nr_windows, row, index_file)
         
         labels = train[row, 1:6]
         labels = torch.tensor(labels.astype(float), dtype=torch.float32)
         labels = labels.view(1, -1)
         y[row, :] = labels
 
-    return X, y
+    return X, y, nr_windows

@@ -6,19 +6,18 @@ import math
 import copy
 
 num_channels = 8
-embed_dim = 100
-kernel_size = 1000 # 4000 = 1sec
+embed_dim = 64
+kernel_size = 100 # 4000 = 1sec
 stride = kernel_size//4
 num_classes = 5
 attention_heads = 4
-transformer_blocks = 4
+transformer_blocks = 2 
 mlp_nodes = 256
-nr_tokens = (80000 - kernel_size) // stride + 1
 
 class PatchEmbedding(nn.Module):
-    def __init__(self):
+    def __init__(self, nr_windows):
         super().__init__()
-        self.patch_embed = nn.Conv1d(in_channels=num_channels, out_channels=embed_dim, kernel_size=kernel_size, stride = stride)
+        self.patch_embed = nn.Conv1d(in_channels=8*nr_windows, out_channels=embed_dim, kernel_size=kernel_size, stride = stride)
 
     def forward(self, x):
         embedding = self.patch_embed(x)             # outputs [batch, embed_dim, #tokens]
@@ -30,17 +29,19 @@ class TransformerEncoder(nn.Module):
         super().__init__()
         self.ln1 = nn.LayerNorm(embed_dim)
         self.multi_head_attention = nn.MultiheadAttention(embed_dim, attention_heads, batch_first=True)
+        self.dropout = nn.Dropout1d(p=0.2)
         self.ln2 = nn.LayerNorm(embed_dim)
         self.mlp = nn.Sequential(
             nn.Linear(embed_dim, mlp_nodes),
             nn.GELU(),
+            nn.Dropout(p=0.2),
             nn.Linear(mlp_nodes, embed_dim)
         )
 
     def forward(self, x):
         residual1 = x
         x = self.ln1(x)
-        x = self.multi_head_attention(x, x, x)[0] + residual1
+        x = self.dropout(self.multi_head_attention(x, x, x)[0]) + residual1
         residual2 = x
         x = self.ln2(x)
         x = self.mlp(x) + residual2
@@ -50,20 +51,24 @@ class MLP_Head(nn.Module):
     def __init__(self):
         super().__init__()
         self.ln1 = nn.LayerNorm(embed_dim)          # takes in cls token only
+        self.dropout = nn.Dropout(p=0.2)
         self.fc1 = nn.Linear(embed_dim, mlp_nodes)
         self.fc2 = nn.Linear(mlp_nodes, mlp_nodes)
         self.fc3 = nn.Linear(mlp_nodes, num_classes)
 
     def forward(self, x):
         x = F.relu(self.fc1(self.ln1(x)))
+        x = self.dropout(x)
         x = F.relu(self.fc2(x))
+        x = self.dropout(x)
         x = self.fc3(x)
         return x
     
 class Transformer(nn.Module):
-    def __init__(self):
+    def __init__(self, nr_windows, win_len):
+        nr_tokens = (win_len - kernel_size) // stride + 1
         super().__init__()
-        self.embedding = PatchEmbedding()
+        self.embedding = PatchEmbedding(nr_windows)
         self.cls_token = nn.Parameter(torch.randn(1,1,embed_dim))
         self.position_embedding = nn.Parameter(torch.randn(1, nr_tokens+1, embed_dim))
         self.transformer_block = nn.Sequential(*[TransformerEncoder() for _ in range(transformer_blocks)])
@@ -82,9 +87,15 @@ class Transformer(nn.Module):
 
 
 def train_transformer(transformer, train_loader, val_loader, device, epochs = 150):
-    optimizer = optim.Adam(transformer.parameters(), lr = 5e-4, weight_decay=1e-4)
+    optimizer = optim.Adam(transformer.parameters(), lr = 5e-4, weight_decay=1e-3)
     criterion_train = nn.BCEWithLogitsLoss()
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=5, factor=0.5, min_lr=5e-6)
+
+    # for early stopping
+    early_st_patience = 10
+    best_val = math.inf
+    bad_epochs = 0
+    best_state = None
 
     for epoch in range(epochs):
         transformer.train()
@@ -110,6 +121,7 @@ def train_transformer(transformer, train_loader, val_loader, device, epochs = 15
         train_loss /= total_train
         train_acc = correct_train / total_train
 
+        # lr scheduler
         transformer.eval()
         criterion_val = nn.BCEWithLogitsLoss()
         total_val, correct_val = 0, 0
@@ -133,12 +145,8 @@ def train_transformer(transformer, train_loader, val_loader, device, epochs = 15
         scheduler.step(val_loss)
 
         # early stopping
-        early_st_patience = 8
-        best_val = -math.inf
-        bad_epochs = 0
-        best_state = None
-        if val_acc > best_val:
-            best_val = val_acc
+        if val_loss < best_val:
+            best_val = val_loss
             bad_epochs = 0
             best_state = copy.deepcopy(transformer.state_dict())
         else:
@@ -148,4 +156,34 @@ def train_transformer(transformer, train_loader, val_loader, device, epochs = 15
                     transformer.load_state_dict(best_state)
                 break
 
-        if epoch%10==0: print(f"Epoch {epoch}: train_acc: {train_acc} || train_loss: {train_loss} || val_acc: {val_acc} || val_loss: {val_loss}, lr: {optimizer.param_groups[0]['lr']:.6f}")
+        print(f"Epoch {epoch}: train_acc: {round(train_acc, 2)} || train_loss: {round(train_loss, 3)} || val_acc: {round(val_acc, 2)} || val_loss: {round(val_loss, 3)}, lr: {optimizer.param_groups[0]['lr']:.6f}")
+
+def test_transformer(transformer, val_loader, device, metrics):
+    transformer.eval()
+    criterion_val = nn.BCEWithLogitsLoss()
+    total_val, correct_val = 0, 0
+    val_loss = 0
+
+    with torch.no_grad():
+        for xv, yv in val_loader:
+            xv, yv = xv.to(device), yv.to(device)
+            pred = transformer(xv)
+            loss = criterion_val(pred, yv)
+            val_loss += loss.item()
+            y_pred = torch.sigmoid(pred)
+            y_pred = (y_pred > 0.5).int()
+            
+            total_val += xv.shape[0]
+            for row in range(xv.shape[0]):
+                if torch.equal(y_pred[row, :], yv[row, :]):
+                    correct_val += 1
+                
+    val_loss /= total_val
+    val_acc = correct_val / total_val
+
+    metrics["Final_loss"].append(val_loss)
+    metrics["Acc"].append(val_acc)
+
+    return metrics
+
+
