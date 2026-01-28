@@ -5,6 +5,7 @@ import math
 from torch.utils.data import DataLoader, TensorDataset
 import librosa
 import matplotlib.pyplot as plt
+from scipy import signal
 
 def number(df_x):
     map_gender = {'M': 0, 'F': 1} 
@@ -104,6 +105,13 @@ def fix_length(wav_file):
     
     return wav_file
 
+def filter(wav_file):
+    b, a = signal.butter(5, 250, 'low', analog = False, fs=4000) #first parameter is signal order and the second one refers to frequenc limit. I set limit 30 so that I can see only below 30 frequency signal component
+    output = signal.filtfilt(b, a, wav_file)
+    output_copy = output.copy()
+    output = torch.tensor(output_copy)
+    return output
+
 def load_pcg_data(device):
     X = torch.zeros([108, 8, 80000], dtype=torch.float32, device=device)
     y = torch.zeros([108, 5], dtype=torch.float32, device=device)
@@ -116,7 +124,9 @@ def load_pcg_data(device):
             wav_file, _ = librosa.load(f'data/train/{file_name}.wav', sr=4000)
             if wav_file.shape[0] != 80000:
                 wav_file = fix_length(wav_file)
-            X[row, index, :] = torch.tensor(wav_file)
+
+            #wav_file_filtered = filter(wav_file)    
+            X[row, index, :] = wav_file
         
         labels = train[row, 1:6]
         labels = torch.tensor(labels.astype(float), dtype=torch.float32)
