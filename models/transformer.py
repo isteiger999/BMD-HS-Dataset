@@ -4,6 +4,8 @@ import torch.optim as optim
 import torch.nn.functional as F
 import math
 import copy
+from models.ANN import ANN
+
 
 num_channels = 8
 embed_dim = 32

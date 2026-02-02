@@ -4,20 +4,26 @@ import torch.nn.functional as F
 import torch.optim as optim
 import math
 
+n_classes = 5
+
 class ANN(nn.Module):
     def __init__(self):
         super().__init__()
-        self.fc1 = nn.Linear(4, 128)
-        self.fc2 = nn.Linear(128,128)
-        self.fc3 = nn.Linear(128,5)
+        self.mlp = nn.Sequential(
+            nn.Linear(4, 128),
+            nn.ReLU(),
+            nn.Dropout(p=0.2),
+            nn.Linear(128,128),
+            nn.ReLU(),
+            nn.Dropout(p=0.2),
+            nn.Linear(128,n_classes)
+        )
     
     def forward(self, x):
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-        logits = self.fc3(x)
-        return logits
+        meta_logits = self.mlp(x)
+        return meta_logits
     
-def train_ann(ann, device, train_loader, val_loader):
+def train_ann(ann, device, train_loader, val_loader, epochs):
     optimizer = optim.Adam(ann.parameters(), lr=1e-3, weight_decay=5e-4)
     criterion_train = nn.BCEWithLogitsLoss()
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=5, factor=0.5, min_lr=5e-6)
@@ -27,7 +33,6 @@ def train_ann(ann, device, train_loader, val_loader):
     bad_epochs = 0
     best_state = None
 
-    epochs = 100
     for epoch in range(epochs):
         ann.train()
         train_loss = 0
@@ -71,7 +76,7 @@ def train_ann(ann, device, train_loader, val_loader):
         val_loss /= total_val
         scheduler.step(val_loss)
 
-        if epoch%10==0: print(f"Epoch {epoch} Train Loss: {train_loss}, train_acc: {correct_train/total_train} || Val Loss: {val_loss}, train_acc: {correct_val/total_val}, lr: {optimizer.param_groups[0]['lr']}")
+        if epoch%10==0: print(f"Epoch {epoch} Train Loss: {train_loss}, train_acc: {correct_train/total_train} || Val Loss: {val_loss}, val_acc: {correct_val/total_val}, lr: {optimizer.param_groups[0]['lr']}")
 
 def test_ann(ann, device, val_loader, test_loader, metrics, mode):
     
