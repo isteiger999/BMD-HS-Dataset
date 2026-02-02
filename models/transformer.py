@@ -141,9 +141,7 @@ def train_transformer(transformer, train_loader, val_loader, device, epochs = 15
                 
                 total_val += xv.shape[0]
                 for row in range(xv.shape[0]):
-                    #if torch.equal(y_pred[row, :], yv[row, :]):
-                        #correct_val += 1
-                    correct_val += (y_pred == yv).float().mean().item()
+                    correct_val += (y_pred[row, :] == yv[row, :]).float().mean().item()
                     
         val_loss /= total_val
         val_acc = correct_val / total_val
@@ -180,9 +178,7 @@ def test_transformer(transformer, val_loader, device, metrics):
             
             total_val += xv.shape[0]
             for row in range(xv.shape[0]):
-                #if torch.equal(y_pred[row, :], yv[row, :]):
-                    #correct_val += 1
-                correct_val += (y_pred==yv).float().mean().item()
+                correct_val += (y_pred[row,:]==yv[row,:]).float().mean().item()
                 
     val_loss /= total_val
     val_acc = correct_val / total_val

@@ -67,16 +67,17 @@ def train_ann(ann, device, train_loader, val_loader, epochs):
                 pred = ann(xv)
                 loss = criterion_val(pred, yv)
                 val_loss += loss.item()
-                total_val += xv.shape[0]
+
                 y_pred = (torch.sigmoid(preds)>0.5).int()
+                total_val += xv.shape[0]
                 for row in range(xv.shape[0]):
-                    if torch.equal(y_pred[row, :], y[row, :]):
-                        correct_val += 1
+                    correct_val += (y_pred[row, :] == yv[row, :]).float().mean().item()
         
         val_loss /= total_val
+        acc_val = correct_val/total_val
         scheduler.step(val_loss)
 
-        if epoch%10==0: print(f"Epoch {epoch} Train Loss: {train_loss}, train_acc: {correct_train/total_train} || Val Loss: {val_loss}, val_acc: {correct_val/total_val}, lr: {optimizer.param_groups[0]['lr']}")
+        if epoch%10==0: print(f"Epoch {epoch} train_acc: {correct_train/total_train}, Train Loss: {train_loss} || val_acc: {acc_val}, Val Loss: {val_loss}, lr: {optimizer.param_groups[0]['lr']}")
 
 def test_ann(ann, device, val_loader, test_loader, metrics, mode):
     

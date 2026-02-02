@@ -1,7 +1,7 @@
 import torch
 from data_loader import load_data_simple, split_data, loaders, mean_std, load_pcg_data
 from models.transformer import Transformer, train_transformer, test_transformer
-from models.late_fusion import LateFusion, train_lf
+from models.late_fusion import LateFusion, train_lf, test_lf
 from models.ANN import ANN, train_ann
 
 
@@ -35,11 +35,12 @@ def main():
         train_ann(ann, device, train_loader2, val_loader2, epochs = 100)
 
         # 3. Train Late Fusion Layer alone
-        lf = LateFusion(nr_windows, win_len).to(device)
-        train_lf(lf, transformer, ann, device, train_loader, val_loader, train_loader2, val_loader2, epochs=100)
+        lf = LateFusion(transformer, ann).to(device)
+        train_lf(lf, device, train_loader, val_loader, train_loader2, val_loader2, epochs=100)
+        metrics = test_lf(lf, val_loader, val_loader2, device, metrics)
 
     
-    #mean_std(metrics)
+    mean_std(metrics)
     
 
 if __name__ == '__main__':
