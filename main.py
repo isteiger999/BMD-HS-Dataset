@@ -37,6 +37,8 @@ def main():
         # 3. Train Late Fusion Layer alone
         lf = LateFusion(transformer, ann).to(device)
         train_lf(lf, device, train_loader, val_loader, train_loader2, val_loader2, epochs=100)
+        
+        #metrics = test_lf(lf, train_loader, train_loader2, device, metrics)
         metrics = test_lf(lf, val_loader, val_loader2, device, metrics)
 
     

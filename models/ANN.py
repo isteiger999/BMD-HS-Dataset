@@ -54,6 +54,7 @@ def train_ann(ann, device, train_loader, val_loader, epochs):
                     correct_train += 1
         
         train_loss /= total_train
+        acc_train = correct_train/total_train
 
         # LR update
         total_val, correct_val = 0, 0
@@ -77,7 +78,8 @@ def train_ann(ann, device, train_loader, val_loader, epochs):
         acc_val = correct_val/total_val
         scheduler.step(val_loss)
 
-        if epoch%10==0: print(f"Epoch {epoch} train_acc: {correct_train/total_train}, Train Loss: {train_loss} || val_acc: {acc_val}, Val Loss: {val_loss}, lr: {optimizer.param_groups[0]['lr']}")
+        if epoch%10==0: print(f"Epoch {epoch}: train_acc: {round(acc_train, 2)} || train_loss: {round(train_loss, 3)} || val_acc: {round(acc_val, 2)} || val_loss: {round(val_loss, 3)}, lr: {optimizer.param_groups[0]['lr']:.6f}")
+
 
 def test_ann(ann, device, val_loader, test_loader, metrics, mode):
     

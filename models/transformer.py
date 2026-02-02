@@ -8,13 +8,13 @@ from models.ANN import ANN
 
 
 num_channels = 8
-embed_dim = 32
+embed_dim = 48
 kernel_size = 100 # 4000 = 1sec
 stride = kernel_size//4
 num_classes = 5
 attention_heads = 4
-transformer_blocks = 1
-mlp_nodes = 128
+transformer_blocks = 2
+mlp_nodes = 256
 
 class PatchEmbedding(nn.Module):
     def __init__(self, nr_windows):
@@ -134,8 +134,8 @@ def train_transformer(transformer, train_loader, val_loader, device, epochs = 15
             for xv, yv in val_loader:
                 xv, yv = xv.to(device), yv.to(device)
                 pred = transformer(xv)
-                loss = criterion_val(pred, yv)
-                val_loss += loss.item()
+                lossv = criterion_val(pred, yv)
+                val_loss += lossv.item()
                 y_pred = torch.sigmoid(pred)
                 y_pred = (y_pred > 0.5).int()
                 
