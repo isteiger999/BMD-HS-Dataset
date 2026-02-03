@@ -16,8 +16,12 @@ attention_heads = 4
 transformer_blocks = 2
 mlp_nodes = 256
 
+patch_size = 16
+
+# Embedding for raw audio timeseries --> very noisy
+'''
 class PatchEmbedding(nn.Module):
-    def __init__(self, nr_windows):
+    def __init__(self, nr_windows):   # I used nr_windows here, because my X tensor already had the signal cut into many windows
         super().__init__()
         self.patch_embed = nn.Conv1d(in_channels=8*nr_windows, out_channels=embed_dim, kernel_size=kernel_size, stride = stride)
 
@@ -25,7 +29,19 @@ class PatchEmbedding(nn.Module):
         embedding = self.patch_embed(x)             # outputs [batch, embed_dim, #tokens]
         embedding = embedding.transpose(1,2)        # transformer expects [batch, #tokens, embed_dim]
         return embedding
-    
+'''
+
+class EmbeddingSpectograms(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.embedding = nn.Conv2d(in_channels=num_channels, out_channels=embed_dim, kernel_size=patch_size, stride=patch_size)
+
+    def forward(self, x):
+        x = self.embedding(x)
+        x = x.flatten(2)
+        x = x.transpose(1,2)
+        return x
+
 class TransformerEncoder(nn.Module):
     def __init__(self):
         super().__init__()
@@ -67,10 +83,11 @@ class MLP_Head(nn.Module):
         return x
     
 class Transformer(nn.Module):
-    def __init__(self, nr_windows, win_len):
-        nr_tokens = (win_len - kernel_size) // stride + 1
+    def __init__(self):
+        nr_tokens = ((401 - patch_size) // patch_size + 1) * (128 - patch_size // patch_size + 1)
         super().__init__()
-        self.embedding = PatchEmbedding(nr_windows)
+        #self.embedding = PatchEmbedding(nr_windows)
+        self.embedding = EmbeddingSpectograms()
         self.cls_token = nn.Parameter(torch.randn(1,1,embed_dim))
         self.position_embedding = nn.Parameter(torch.randn(1, nr_tokens+1, embed_dim))
         self.transformer_block = nn.Sequential(*[TransformerEncoder() for _ in range(transformer_blocks)])

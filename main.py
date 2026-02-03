@@ -1,5 +1,5 @@
 import torch
-from data_loader import load_data_simple, split_data, loaders, mean_std, load_pcg_data
+from data_loader import load_data_simple, split_data, loaders, mean_std, load_pcg_data, load_spectograms
 from models.transformer import Transformer, train_transformer, test_transformer
 from models.late_fusion import LateFusion, train_lf, test_lf
 from models.ANN import ANN, train_ann
@@ -9,10 +9,9 @@ def main():
     device = torch.device("mps" if torch.mps.is_available() else "cpu")
     metrics = {"Final_loss": [], "Acc": []}
 
-    #X, y = load_data_simple()
-    win_len = 4000
-    stride = 1000
-    X, y, nr_windows = load_pcg_data(device, win_len, stride)
+    #win_len, stride = 4000, 1000
+    #X, y, nr_windows = load_pcg_data(device, win_len, stride)
+    X, y = load_spectograms(device)
     Xs, ys = load_data_simple() # Xs = 108,4 || ys = 108,5
 
     iterations = 5
@@ -26,7 +25,7 @@ def main():
         train_loader2, val_loader2, test_loader2 = loaders(Xs_train, ys_train, Xs_val, ys_val, Xs_test, ys_test)
         
         # 1. Train Transformer alone
-        transformer = Transformer(nr_windows, win_len).to(device)
+        transformer = Transformer().to(device)
         train_transformer(transformer, train_loader, val_loader, device, epochs = 150)
         #metrics = test_transformer(transformer, val_loader, device, metrics)
 
