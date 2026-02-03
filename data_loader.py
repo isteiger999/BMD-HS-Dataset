@@ -169,13 +169,29 @@ def load_spectograms(device):
             spectogram_tensor = torch.load(f"data/spectrograms/{file_name}.pt", weights_only=True)
             if spectogram_tensor.shape[1] != 401:
                 print(f"Issue with shape of spectrogram tensor!!!")
-            X[row, col, :] = spectogram_tensor
+            X[row, col] = spectogram_tensor.clone()
+           
+
+             # Convert to numpy and use imshow
+            spec_np = spectogram_tensor.cpu().numpy()
+            
+            
+            plt.figure(figsize=(10, 4))
+            plt.imshow(spec_np, aspect='auto', origin='lower', cmap='viridis')
+            plt.colorbar(format='%+2.0f dB')
+            plt.title(f'Mel Spectrogram: {file_name}')
+            plt.xlabel('Time')
+            plt.ylabel('Mel Frequency')
+            plt.tight_layout()
+            plt.show()
             
             
         labels = train[row, 1:6]
         labels = torch.tensor(labels.astype(float), dtype=torch.float32)
         labels = labels.view(1, -1)
         y[row, :] = labels
+
+    X = X.contiguous()
 
     return X, y
 
