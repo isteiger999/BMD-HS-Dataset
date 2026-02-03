@@ -99,7 +99,8 @@ def mean_std(metrics):
 def fix_length(wav_file):
     if wav_file.shape[0] < 80000:
         diff = 80000-wav_file.shape[0]
-        wav_file = np.pad(wav_file, (0, diff), mode='edge')
+        rest = wav_file[:diff]
+        wav_file = torch.concat([wav_file, rest], dim=0)
     else: 
         wav_file = wav_file[:80000]
     
@@ -147,6 +148,7 @@ def load_pcg_data(device, win_len, stride):
 
     return X, y, nr_windows
 
+####### COMPUTER VISION APPROACH USING SPECTROGRAMS ###########
 
 
 
