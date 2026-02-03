@@ -155,9 +155,9 @@ def load_pcg_data(device, win_len, stride):
 
 def load_spectograms(device):
     nr_recording_per_patient = 8
-    spec = torch.load('data/spectrograms/AR_016_sit_Aor.pt')
-    height = spec.shape[1]              # 128
-    width = spec.shape[2]               # 401
+    spec = torch.load('data/spectrograms/AR_016_sit_Aor.pt', weights_only=True)
+    height = spec.shape[0]              # 128
+    width = spec.shape[1]               # 401
     X = torch.zeros([108, nr_recording_per_patient, height, width], dtype=torch.float32, device=device)
     y = torch.zeros([108, 5], dtype=torch.float32, device=device)
 
@@ -166,11 +166,10 @@ def load_spectograms(device):
 
     for row in range(train_csv.shape[0]):
         for col, file_name in enumerate(train_csv.iloc[row, 6:]):
-            spectogram_tensor = torch.load(f"data/spectrograms/{file_name}.pt")
-            spec_mono = spectogram_tensor.mean(dim=0, keepdim=True).squeeze(0)
-            if spec_mono.shape[1] != 401:
-                print(f"spec_mono shape: {spec_mono.shape}")
-            X[row, col, :] = spec_mono
+            spectogram_tensor = torch.load(f"data/spectrograms/{file_name}.pt", weights_only=True)
+            if spectogram_tensor.shape[1] != 401:
+                print(f"Issue with shape of spectrogram tensor!!!")
+            X[row, col, :] = spectogram_tensor
             
             
         labels = train[row, 1:6]

@@ -17,6 +17,7 @@ transformer_blocks = 2
 mlp_nodes = 256
 
 patch_size = 16
+nr_tokens = ((401 - patch_size) // patch_size + 1) * ((128 - patch_size) // patch_size + 1)
 
 # Embedding for raw audio timeseries --> very noisy
 '''
@@ -38,8 +39,8 @@ class EmbeddingSpectograms(nn.Module):
 
     def forward(self, x):
         x = self.embedding(x)
-        x = x.flatten(2)
-        x = x.transpose(1,2)
+        x = x.flatten(2).contiguous()
+        x = x.transpose(1,2).contiguous()
         return x
 
 class TransformerEncoder(nn.Module):
@@ -47,7 +48,7 @@ class TransformerEncoder(nn.Module):
         super().__init__()
         self.ln1 = nn.LayerNorm(embed_dim)
         self.multi_head_attention = nn.MultiheadAttention(embed_dim, attention_heads, batch_first=True)
-        self.dropout = nn.Dropout1d(p=0.2)
+        self.dropout = nn.Dropout(p=0.2)
         self.ln2 = nn.LayerNorm(embed_dim)
         self.mlp = nn.Sequential(
             nn.Linear(embed_dim, mlp_nodes),
@@ -84,7 +85,6 @@ class MLP_Head(nn.Module):
     
 class Transformer(nn.Module):
     def __init__(self):
-        nr_tokens = ((401 - patch_size) // patch_size + 1) * (128 - patch_size // patch_size + 1)
         super().__init__()
         #self.embedding = PatchEmbedding(nr_windows)
         self.embedding = EmbeddingSpectograms()
@@ -99,8 +99,9 @@ class Transformer(nn.Module):
         cls_token = self.cls_token.expand(B, -1, -1)
         x = torch.cat((cls_token, x), dim = 1)  # dim = 1 is rows (dim=0 is batch, dim = 2 are columns)
         x = x + self.position_embedding
+        x = x.contiguous()
         x = self.transformer_block(x)
-        x = x[:, 0]
+        x = x[:, 0]  # meaning first row (cls token) of every datapoint in the batch
         x = self.mlp_head(x)
         return x
 
@@ -134,9 +135,7 @@ def train_transformer(transformer, train_loader, val_loader, device, epochs = 15
             y_pred = torch.sigmoid(preds)
             y_pred = (y_pred > 0.5).int()
             for row in range(x.shape[0]):
-                #if torch.equal(y_pred[row, :], y[row, :]):
-                    #correct_train += 1
-                correct_train += (y_pred == y).float().mean().item()
+                correct_train += (y_pred[row, :] == y[row, :]).float().mean().item()
 
 
         train_loss /= total_train

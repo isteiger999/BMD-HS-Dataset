@@ -65,7 +65,7 @@ def train_lf(lf, device, train_loader, val_loader, train_loader2, val_loader2, e
         val_loss = 0
         correct_val, total_val = 0, 0
         with torch.no_grad():
-            for (xv,yv), (xsv,ysv) in zip(val_loader, val_loader2):
+            for (xv,yv), (xsv,_) in zip(val_loader, val_loader2):
                 xv, xsv, yv = xv.to(device), xsv.to(device), yv.to(device)
                 preds = lf(xv, xsv)
                 loss = criterion_val(preds, yv)
@@ -74,7 +74,7 @@ def train_lf(lf, device, train_loader, val_loader, train_loader2, val_loader2, e
                 y_pred = (preds > 0.5).int()
                 total_val += xv.shape[0]
                 for row in range(xv.shape[0]):
-                    correct_val += (y_pred == yv).float().mean().item()
+                    correct_val += (y_pred[row, :] == yv[row, :]).float().mean().item()
         
         acc_val = correct_val/total_val
         val_loss /= total_val
