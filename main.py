@@ -13,7 +13,7 @@ def main():
     #win_len, stride = 4000, 1000
     #X, y, nr_windows = load_pcg_data(device, win_len, stride)
     X, y = load_spectograms(device)
-    Xs = load_data_simple(device) # Xs = 108,4 || ys = 108,5
+    Xs = load_data_simple() # Xs = 108,4 || ys = 108,5
 
     iterations = 5
     stride_splits = 1/iterations

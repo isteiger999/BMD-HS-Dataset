@@ -92,7 +92,7 @@ def train_ann(ann, device, train_loader, val_loader, epochs):
                     ann.load_state_dict(best_state)
                 break
 
-        if epoch%10==0: print(f"Epoch {epoch}: train_acc: {round(acc_train, 2)} || train_loss: {round(train_loss, 3)} || val_acc: {round(acc_val, 2)} || val_loss: {round(val_loss, 3)}, lr: {optimizer.param_groups[0]['lr']:.6f}")
+        if epoch%10==0: print(f"ANN Epoch {epoch}: train_acc: {round(acc_train, 2)} || train_loss: {round(train_loss, 3)} || val_acc: {round(acc_val, 2)} || val_loss: {round(val_loss, 3)}, lr: {optimizer.param_groups[0]['lr']:.6f}")
 
 
 def test_ann(ann, device, val_loader, test_loader, metrics, mode):

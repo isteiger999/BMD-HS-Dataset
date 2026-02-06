@@ -26,28 +26,25 @@ def number(df_x):
         
     return df_x
 
-def load_data_simple(device):     
+def load_data_simple():     
 
     nr_recording_per_patient = 8
 
     df_x = pd.read_csv(r"data/additional_metadata.csv")
-    df_y = pd.read_csv(r"data/train.csv")
-
     df_x = df_x.drop(['patient_id'], axis=1)
-    df_y = df_y[['AS','AR','MR','MS','N']]
-
     df_x = number(df_x)
+    df_x = torch.Tensor(np.array(df_x))
 
-    X = torch.zeros([108*nr_recording_per_patient, 4], dtype=torch.float32, device=device)
+    X = torch.zeros([108*nr_recording_per_patient, 4], dtype=torch.float32)
 
     for row, df in enumerate(df_x):
         for col in range(nr_recording_per_patient):
-            X[row + col, :] = df
+            X[8*row + col, :] = df
 
     return X
 
 def calc_fraction(X, stride, split):
-    fract_train = round(X.shape[0] * split[0])
+    fract_train = ((X.shape[0] * split[0]) // 8)*8
     residue = X.shape[0] - fract_train
     stride = math.floor(X.shape[0] * stride)
     if residue%2 == 0:
@@ -183,8 +180,8 @@ def load_spectograms(device):
         labels = labels.view(1, -1)
         for col, file_name in enumerate(train_csv.iloc[row, 6:]):
             spectogram_tensor = torch.load(f"data/spectrograms/{file_name}.pt", weights_only=True)
-            X[row+col] = spectogram_tensor
-            y[row+col, :] = labels
+            X[8*row+col] = spectogram_tensor
+            y[8*row+col, :] = labels
 
              # Convert to numpy and use imshow
             """

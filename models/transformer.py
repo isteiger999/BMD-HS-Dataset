@@ -42,11 +42,12 @@ class EmbeddingSpectograms(nn.Module):
 
     def forward(self, x):
         x = self.embedding(x)
-        #x = x.flatten(2)
-        x = x.reshape([x.shape[0], x.shape[1], x.shape[2]*x.shape[3]])
-        # = x.transpose(1,2)
-        x = x.reshape([x.shape[0], x.shape[2], x.shape[1]])     # transformer expects: [B,embed_dim, channels]
+        x = x.flatten(2)
+        #x = x.reshape([x.shape[0], x.shape[1], x.shape[2]*x.shape[3]])
+        x = x.transpose(1,2).contiguous()
+        #x = x.reshape([x.shape[0], x.shape[2], x.shape[1]])     # transformer expects: [B, flattened_token, embed_dim]
         return x
+
 
 class TransformerEncoder(nn.Module):
     def __init__(self):
@@ -106,7 +107,7 @@ class Transformer(nn.Module):
         x = x + self.position_embedding
         x = x.contiguous()
         x = self.transformer_block(x)
-        x = x[:, 0]  # meaning first row (cls token) of every datapoint in the batch
+        x = x[:, 0].contiguous()  # meaning first row (cls token) of every datapoint in the batch
         x = self.mlp_head(x)
         return x
 
@@ -180,7 +181,7 @@ def train_transformer(transformer, train_loader, val_loader, device, epochs = 15
                     transformer.load_state_dict(best_state)
                 break
 
-        print(f"Epoch {epoch}: train_acc: {round(train_acc, 2)} || train_loss: {round(train_loss, 3)} || val_acc: {round(val_acc, 2)} || val_loss: {round(val_loss, 3)}, lr: {optimizer.param_groups[0]['lr']:.6f}")
+        print(f"Trans Epoch {epoch}: train_acc: {round(train_acc, 2)} || train_loss: {round(train_loss, 3)} || val_acc: {round(val_acc, 2)} || val_loss: {round(val_loss, 3)}, lr: {optimizer.param_groups[0]['lr']:.6f}")
 
 def test_transformer(transformer, val_loader, device, metrics):
     transformer.eval()
