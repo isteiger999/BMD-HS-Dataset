@@ -6,6 +6,12 @@ from torch.utils.data import DataLoader, TensorDataset
 import librosa
 import matplotlib.pyplot as plt
 from scipy import signal
+import random
+
+def ensure_deterministic():
+    torch.manual_seed(0)
+    random.seed(0)
+    np.random.seed(0)
 
 def number(df_x):
     map_gender = {'M': 0, 'F': 1} 
@@ -20,7 +26,10 @@ def number(df_x):
         
     return df_x
 
-def load_data_simple():     
+def load_data_simple(device):     
+
+    nr_recording_per_patient = 8
+
     df_x = pd.read_csv(r"data/additional_metadata.csv")
     df_y = pd.read_csv(r"data/train.csv")
 
@@ -29,12 +38,13 @@ def load_data_simple():
 
     df_x = number(df_x)
 
-    X, y = torch.tensor(np.array(df_x), dtype=torch.float32), torch.tensor(np.array(df_y), dtype=torch.float32) 
-    
-    # X.shape = 108, 4
-    # y.shape = 108, 5
+    X = torch.zeros([108*nr_recording_per_patient, 4], dtype=torch.float32, device=device)
 
-    return X, y
+    for row, df in enumerate(df_x):
+        for col in range(nr_recording_per_patient):
+            X[row + col, :] = df
+
+    return X
 
 def calc_fraction(X, stride, split):
     fract_train = round(X.shape[0] * split[0])
@@ -126,6 +136,9 @@ def load_pcg_data(device, win_len, stride):
     nr_channels = 8
     nr_windows = (len_rec - win_len) // stride + 1
 
+    #X = torch.zeros([108, nr_channels*nr_windows, win_len], dtype=torch.float32, device=device)
+    #y = torch.zeros([108, 5], dtype=torch.float32, device=device)
+
     X = torch.zeros([108, nr_channels*nr_windows, win_len], dtype=torch.float32, device=device)
     y = torch.zeros([108, 5], dtype=torch.float32, device=device)
 
@@ -158,24 +171,24 @@ def load_spectograms(device):
     spec = torch.load('data/spectrograms/AR_016_sit_Aor.pt', weights_only=True)
     height = spec.shape[0]              # 128
     width = spec.shape[1]               # 401
-    X = torch.zeros([108, nr_recording_per_patient, height, width], dtype=torch.float32, device=device)
-    y = torch.zeros([108, 5], dtype=torch.float32, device=device)
-
+    X = torch.zeros([108*nr_recording_per_patient, 1, height, width], dtype=torch.float32, device=device)
+    y = torch.zeros([108*nr_recording_per_patient, 5], dtype=torch.float32, device=device)
+    
     train_csv = pd.read_csv('data/train.csv')
     train = train_csv.to_numpy()
 
     for row in range(train_csv.shape[0]):
+        labels = train[row, 1:6]
+        labels = torch.tensor(labels.astype(float), dtype=torch.float32)
+        labels = labels.view(1, -1)
         for col, file_name in enumerate(train_csv.iloc[row, 6:]):
             spectogram_tensor = torch.load(f"data/spectrograms/{file_name}.pt", weights_only=True)
-            if spectogram_tensor.shape[1] != 401:
-                print(f"Issue with shape of spectrogram tensor!!!")
-            X[row, col] = spectogram_tensor.clone()
-           
+            X[row+col] = spectogram_tensor
+            y[row+col, :] = labels
 
              # Convert to numpy and use imshow
+            """
             spec_np = spectogram_tensor.cpu().numpy()
-            
-            
             plt.figure(figsize=(10, 4))
             plt.imshow(spec_np, aspect='auto', origin='lower', cmap='viridis')
             plt.colorbar(format='%+2.0f dB')
@@ -184,15 +197,8 @@ def load_spectograms(device):
             plt.ylabel('Mel Frequency')
             plt.tight_layout()
             plt.show()
-            
-            
-        labels = train[row, 1:6]
-        labels = torch.tensor(labels.astype(float), dtype=torch.float32)
-        labels = labels.view(1, -1)
-        y[row, :] = labels
-
-    X = X.contiguous()
-
+            """
+    
     return X, y
 
 

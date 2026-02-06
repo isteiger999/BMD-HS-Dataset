@@ -3,6 +3,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 import math
+import copy
+
 
 n_classes = 5
 
@@ -28,8 +30,8 @@ def train_ann(ann, device, train_loader, val_loader, epochs):
     criterion_train = nn.BCEWithLogitsLoss()
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=5, factor=0.5, min_lr=5e-6)
 
-    early_st_patience=10
-    best_val = -math.inf
+    early_st_patience=8
+    best_val = math.inf
     bad_epochs = 0
     best_state = None
 
@@ -77,6 +79,18 @@ def train_ann(ann, device, train_loader, val_loader, epochs):
         val_loss /= total_val
         acc_val = correct_val/total_val
         scheduler.step(val_loss)
+
+        # early stopping
+        if val_loss < best_val:
+            best_val = val_loss
+            bad_epochs = 0
+            best_state = copy.deepcopy(ann.state_dict())
+        else:
+            bad_epochs += 1
+            if bad_epochs >= early_st_patience:
+                if best_state is not None:
+                    ann.load_state_dict(best_state)
+                break
 
         if epoch%10==0: print(f"Epoch {epoch}: train_acc: {round(acc_train, 2)} || train_loss: {round(train_loss, 3)} || val_acc: {round(acc_val, 2)} || val_loss: {round(val_loss, 3)}, lr: {optimizer.param_groups[0]['lr']:.6f}")
 

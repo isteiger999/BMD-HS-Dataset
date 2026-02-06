@@ -8,18 +8,18 @@ import os
 output_dir = "data/spectrograms"
 os.makedirs(output_dir, exist_ok=True)
 
-def create_spectrograms(device):
+def create_spectrograms():
 
     train_csv = pd.read_csv('data/train.csv')
     transform = transforms.MelSpectrogram(
         sample_rate=4000,
-        n_fft=4096,          # Larger FFT for better frequency resolution (1024ms window)
-        win_length=4096,     # Window length
+        n_fft=512,          # (old: 4096) n_fft >=! win_length (if greater, then adds zeros padding to the end of the window)
+        win_length=512,     # (old: 4096) Window length
         hop_length=200,      # Smaller hop = finer time resolution (80000/200 = 400 time steps)
         f_min=0.5,           # Minimum frequency (0.5 Hz, 30 bpm)
-        f_max=200,           # Maximum frequency (200 Hz - covers heart sounds + murmurs)
+        f_max=1000.0,         # Maximum frequency (covers heart sounds + murmurs)
         n_mels=128,          # Number of mel frequency bins
-        power=2.0            # Power spectrogram
+        power=2.0            # power = 1.0 --> magnitude in spectrogram || power = 2.0 --> magnitude**2 in spectrogram (power)
     )
 
     for row in range(train_csv.shape[0]):
@@ -34,5 +34,4 @@ def create_spectrograms(device):
             save_path = os.path.join(output_dir, f"{file_name}.pt")
             torch.save(mel_specgram, save_path)
         
-device = torch.device("mps" if torch.mps.is_available() else "cpu")
-### create_spectrograms(device)
+create_spectrograms()
