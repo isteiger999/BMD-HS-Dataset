@@ -16,8 +16,8 @@ def create_spectrograms():
         n_fft=512,          # (old: 4096) n_fft >=! win_length (if greater, then adds zeros padding to the end of the window)
         win_length=512,     # (old: 4096) Window length
         hop_length=200,      # Smaller hop = finer time resolution (80000/200 = 400 time steps)
-        f_min=0.5,           # Minimum frequency (0.5 Hz, 30 bpm)
-        f_max=1000.0,         # Maximum frequency (covers heart sounds + murmurs)
+        f_min=0.1,           # Minimum frequency (0.5 Hz, 30 bpm)
+        f_max=50.0,         # Maximum frequency (covers heart sounds + murmurs)
         n_mels=128,          # Number of mel frequency bins
         power=2.0            # power = 1.0 --> magnitude in spectrogram || power = 2.0 --> magnitude**2 in spectrogram (power)
     )

@@ -8,6 +8,7 @@ from models.ANN import ANN, train_ann
 def main():
     ensure_deterministic()
     device = torch.device("mps" if torch.mps.is_available() else "cpu")
+    #device = torch.device("cpu")
     metrics = {"Final_loss": [], "Acc": []}
 
     #win_len, stride = 4000, 1000

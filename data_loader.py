@@ -65,7 +65,9 @@ def split_data(X, y, iteration, stride, split):
     X_val, y_val = X2[(fract_train+iteration*stride):(fract_train+iteration*stride+fract_val), :], y2[(fract_train+iteration*stride):(fract_train+iteration*stride+fract_val), :]
     X_test, y_test = X2[(fract_train+iteration*stride+fract_val):(fract_train+iteration*stride+fract_val+fract_test), :], y2[(fract_train+iteration*stride+fract_val):(fract_train+iteration*stride+fract_val+fract_test), :]
 
-    return X_train, y_train, X_val, y_val, X_test, y_test
+    return (X_train.contiguous(), y_train.contiguous(), 
+            X_val.contiguous(), y_val.contiguous(), 
+            X_test.contiguous(), y_test.contiguous())
 
 def loaders(X_train, y_train, X_val, y_val, X_test, y_test):
     train_ds = TensorDataset(X_train.float(), y_train.squeeze())
@@ -153,9 +155,10 @@ def load_pcg_data(device, win_len, stride):
         
         labels = train[row, 1:6]
         labels = torch.tensor(labels.astype(float), dtype=torch.float32)
-        labels = labels.view(1, -1)
+        labels = labels.reshape(1, -1)
         y[row, :] = labels
 
+    X, y = X.contiguous(), y.contiguous()
     return X, y, nr_windows
 
 
@@ -177,7 +180,7 @@ def load_spectograms(device):
     for row in range(train_csv.shape[0]):
         labels = train[row, 1:6]
         labels = torch.tensor(labels.astype(float), dtype=torch.float32)
-        labels = labels.view(1, -1)
+        labels = labels.reshape(1, -1)
         for col, file_name in enumerate(train_csv.iloc[row, 6:]):
             spectogram_tensor = torch.load(f"data/spectrograms/{file_name}.pt", weights_only=True)
             X[8*row+col] = spectogram_tensor

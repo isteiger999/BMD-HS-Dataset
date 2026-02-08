@@ -9,11 +9,11 @@ from models.ANN import ANN
 
 num_channels = 1
 num_recordings = 8
-embed_dim = 128
+embed_dim = 256
 num_classes = 5
 attention_heads = 4
-transformer_blocks = 4
-mlp_nodes = 256
+transformer_blocks = 6
+mlp_nodes = 512
 """
 patch size: 1 pixel in the spectrogram in horizontal direction corresponds to 50 ms (since we used hop_length=200pixels
 when generating the spectrograms, which corresponds at 4kHz sampling rate a hop of 50ms. patch_size of 8 mean 8*50ms,
@@ -23,29 +23,35 @@ patch_size = 8  # meaning sees 8 (8x8) pixels horizontally (in time) 1 pixel is 
 nr_tokens = ((401 - patch_size) // patch_size + 1) * ((128 - patch_size) // patch_size + 1)
 
 # Embedding for raw audio timeseries --> very noisy
-'''
-class PatchEmbedding(nn.Module):
-    def __init__(self, nr_windows):   # I used nr_windows here, because my X tensor already had the signal cut into many windows
-        super().__init__()
-        self.patch_embed = nn.Conv1d(in_channels=8*nr_windows, out_channels=embed_dim, kernel_size=kernel_size, stride = stride)
-
-    def forward(self, x):
-        embedding = self.patch_embed(x)             # outputs [batch, embed_dim, #tokens]
-        embedding = embedding.transpose(1,2)        # transformer expects [batch, #tokens, embed_dim]
-        return embedding
-'''
 
 class EmbeddingSpectograms(nn.Module):
     def __init__(self):
         super().__init__()
-        self.embedding = nn.Conv2d(in_channels=1, out_channels=embed_dim, kernel_size=patch_size, stride=patch_size)
+        # Each patch is (patch_size x patch_size). 
+        # For a grayscale spectrogram (1 channel), the input features are patch_size^2.
+        self.projection = nn.Linear(patch_size * patch_size, embed_dim)
 
     def forward(self, x):
-        x = self.embedding(x)
-        x = x.flatten(2)
-        #x = x.reshape([x.shape[0], x.shape[1], x.shape[2]*x.shape[3]])
-        x = x.transpose(1,2).contiguous()
-        #x = x.reshape([x.shape[0], x.shape[2], x.shape[1]])     # transformer expects: [B, flattened_token, embed_dim]
+        # x shape: [B, 1, 128, 401]
+        B, C, H, W = x.shape
+        
+        # 1. Crop the spectrogram so it's perfectly divisible by patch_size
+        # (401 becomes 400, 128 is already divisible by 8)
+        H_new = (H // patch_size) * patch_size
+        W_new = (W // patch_size) * patch_size
+        x = x[:, :, :H_new, :W_new]
+        
+        # 2. Use unfold to extract patches manually
+        # This creates a tensor of patches: [B, 1, H/p, W/p, p, p]
+        x = x.unfold(2, patch_size, patch_size).unfold(3, patch_size, patch_size)
+        
+        # 3. Reshape and flatten the patches
+        # We want: [Batch, Number_of_Patches, Patch_Pixels]
+        x = x.contiguous().view(B, -1, patch_size * patch_size)
+        
+        # 4. Project pixels to embed_dim
+        x = self.projection(x) # Result: [B, Tokens, Embed_Dim]
+        
         return x
 
 
@@ -53,7 +59,7 @@ class TransformerEncoder(nn.Module):
     def __init__(self):
         super().__init__()
         self.ln1 = nn.LayerNorm(embed_dim)
-        self.multi_head_attention = nn.MultiheadAttention(embed_dim, attention_heads, batch_first=True)
+        self.multi_head_attention = nn.MultiheadAttention(embed_dim, attention_heads, batch_first=True) # batch_first=False
         self.dropout = nn.Dropout(p=0.2)
         self.ln2 = nn.LayerNorm(embed_dim)
         self.mlp = nn.Sequential(
@@ -66,6 +72,7 @@ class TransformerEncoder(nn.Module):
     def forward(self, x):
         residual1 = x
         x = self.ln1(x)
+        x = x.contiguous()
         x = self.dropout(self.multi_head_attention(x, x, x)[0]) + residual1
         residual2 = x
         x = self.ln2(x)
