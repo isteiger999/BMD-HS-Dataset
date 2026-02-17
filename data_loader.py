@@ -19,64 +19,21 @@ def number(df_x):
 
     df_x = df_x.copy()
 
-    df_x.iloc[:, 1] = df_x.iloc[:, 1].map(map_gender)
-    df_x.iloc[:, 3] = df_x.iloc[:, 3].map(map_home)
+    df_x.iloc[:, 2] = df_x.iloc[:, 2].map(map_gender)
+    df_x.iloc[:, 4] = df_x.iloc[:, 4].map(map_home)
 
     df_x = df_x.apply(pd.to_numeric, errors='coerce')
         
     return df_x
 
-def load_data_simple():     
-
-    nr_recording_per_patient = 8
-
-    df_x = pd.read_csv(r"data/additional_metadata.csv")
-    df_x = df_x.drop(['patient_id'], axis=1)
-    df_x = number(df_x)
-    df_x = torch.Tensor(np.array(df_x))
-
-    X = torch.zeros([108*nr_recording_per_patient, 4], dtype=torch.float32)
-
-    for row, df in enumerate(df_x):
-        for col in range(nr_recording_per_patient):
-            X[8*row + col, :] = df
-
-    return X
-
-def calc_fraction(X, stride, split):
-    fract_train = ((X.shape[0] * split[0]) // 8)*8
-    residue = X.shape[0] - fract_train
-    stride = math.floor(X.shape[0] * stride)
-    if residue%2 == 0:
-        fract_val, fract_test = residue/2, residue/2
-        return int(fract_train), int(fract_val), int(fract_test), int(stride)
-    else:
-        fract_train += 1   
-        residue = X.shape[0] - fract_train
-        fract_val, fract_test = residue/2, residue/2
-        return int(fract_train), int(fract_val), int(fract_test), int(stride)
- 
-def split_data(X, y, iteration, stride, split):
-    X2 = torch.concat([X, X], dim=0)
-    y2 = torch.concat([y, y], dim=0) 
-
-    fract_train, fract_val, fract_test, stride  = calc_fraction(X, stride, split)
-    X_train, y_train = X2[iteration*stride:(fract_train+iteration*stride), :], y2[iteration*stride:(fract_train+iteration*stride), :]
-    X_val, y_val = X2[(fract_train+iteration*stride):(fract_train+iteration*stride+fract_val), :], y2[(fract_train+iteration*stride):(fract_train+iteration*stride+fract_val), :]
-    X_test, y_test = X2[(fract_train+iteration*stride+fract_val):(fract_train+iteration*stride+fract_val+fract_test), :], y2[(fract_train+iteration*stride+fract_val):(fract_train+iteration*stride+fract_val+fract_test), :]
-
-    return (X_train.contiguous(), y_train.contiguous(), 
-            X_val.contiguous(), y_val.contiguous(), 
-            X_test.contiguous(), y_test.contiguous())
-
-def loaders(X_train, y_train, X_val, y_val, X_test, y_test):
-    train_ds = TensorDataset(X_train.float(), y_train.squeeze())
-    val_ds = TensorDataset(X_val.float(), y_val.squeeze())
-    test_ds = TensorDataset(X_test.float(), y_test.squeeze())
+def loaders(X_train, y_train, X_val, y_val, X_test, y_test, Xs_train, Xs_val, Xs_test):
+    train_ds = TensorDataset(X_train.float(), Xs_train.float(), y_train.squeeze())
+    val_ds = TensorDataset(X_val.float(), Xs_val.float(), y_val.squeeze())
+    test_ds = TensorDataset(X_test.float(), Xs_test.float(), y_test.squeeze())
     
-    train_loader = DataLoader(train_ds, batch_size=10, shuffle=True)
-    val_loader = DataLoader(val_ds, batch_size=10, shuffle=False)
-    test_loader = DataLoader(test_ds, batch_size=10, shuffle=False)
+    train_loader = DataLoader(train_ds, batch_size=64, shuffle=True) # shuffle = True
+    val_loader = DataLoader(val_ds, batch_size=64, shuffle=False)
+    test_loader = DataLoader(test_ds, batch_size=64, shuffle=False)
 
     return train_loader, val_loader, test_loader
 
@@ -103,8 +60,6 @@ def mean_std(metrics):
     print(f"Final Acc: {mu_acc}\u00B1{std_acc}")
 
 
-# ----------------------------
-
 def fix_length(wav_file):
     if wav_file.shape[0] < 80000:
         diff = 80000-wav_file.shape[0]
@@ -122,83 +77,137 @@ def filter(wav_file):
     output = torch.tensor(output_copy)
     return output
 
-def window_split(X, wav_file, win_len, stride, nr_windows, row, index_file):
-    wav_file = torch.tensor(wav_file)
-    for window in range(nr_windows):
-        X[row, index_file*nr_windows+window, :] = wav_file[window*stride:window*stride + win_len]
-    
-    return X
-
-def load_pcg_data(device, win_len, stride):
-
-    len_rec = 80000
-    nr_channels = 8
-    nr_windows = (len_rec - win_len) // stride + 1
-
-    #X = torch.zeros([108, nr_channels*nr_windows, win_len], dtype=torch.float32, device=device)
-    #y = torch.zeros([108, 5], dtype=torch.float32, device=device)
-
-    X = torch.zeros([108, nr_channels*nr_windows, win_len], dtype=torch.float32, device=device)
-    y = torch.zeros([108, 5], dtype=torch.float32, device=device)
-
-    train_csv = pd.read_csv('data/train.csv')
-    train = train_csv.to_numpy()
-
-    for row in range(train_csv.shape[0]):
-        for index_file, file_name in enumerate(train_csv.iloc[row, 6:]):
-            wav_file, _ = librosa.load(f'data/train/{file_name}.wav', sr=4000)
-            if wav_file.shape[0] != 80000:
-                wav_file = fix_length(wav_file)
-
-            #wav_file_filtered = filter(wav_file)    
-            X = window_split(X, wav_file, win_len, stride, nr_windows, row, index_file)
-        
-        labels = train[row, 1:6]
-        labels = torch.tensor(labels.astype(float), dtype=torch.float32)
-        labels = labels.reshape(1, -1)
-        y[row, :] = labels
-
-    X, y = X.contiguous(), y.contiguous()
-    return X, y, nr_windows
-
 
 
 
 ####### COMPUTER VISION APPROACH USING SPECTROGRAMS ###########
 
-def load_spectograms(device):
+def create_order():
+    order, labels, metadata = {}, {}, {}
+    train_csv = pd.read_csv(f"data/train.csv")
+    meta_csv = number(pd.read_csv(f"data/additional_metadata.csv")) # number is my own function which converts characters to 0/1
+
+    patients = train_csv["patient_id"].tolist()
+    rec_names = train_csv.drop(["AS", "AR", "MR", "MS" ,"N"], axis=1)
+    labels_dict = train_csv[["patient_id", "AS", "AR", "MR", "MS", "N"]]
+    # 1. Add all patients to order dictionary as keys
+    for patient in patients:
+        order[patient] = []
+        labels[patient] = []
+        metadata[patient] = []
+    
+    # 2. Add all 8 recording names as values to each patient a
+    for row, patient in enumerate(patients):
+        for col in range(8):
+            rec_name = rec_names.iloc[row, col+1] # col+1 because first column is patient name
+            order[patient].append(rec_name)
+            if col <= 4:        # because there are only 5 labels but 8 recs
+                disease = labels_dict.iloc[row, col+1]
+                labels[patient].append(int(disease))
+            if col <= 3:
+                meta = meta_csv.iloc[row, col+1]
+                metadata[patient].append(meta)
+
+    # mix up patients
+    keys = list(order.keys())
+    random.shuffle(keys)
+
+    order = {k: order[k] for k in keys}
+    labels = {k: labels[k] for k in keys}
+    metadata = {k: metadata[k] for k in keys}
+
+    return order, labels, metadata
+
+def calc_fractions(patients, stride, split):
+    patients_tot = int(len(patients)) # 108
+    train_fract = int(split[0] * patients_tot - 0.5)
+    stride = math.floor(stride * patients_tot)
+
+    if train_fract % 2 == 0:
+        residue = patients_tot - train_fract
+        val_fract, test_fract = residue // 2, residue // 2
+        return train_fract, val_fract, test_fract, stride
+    else:
+        train_fract += 1
+        residue = patients_tot - train_fract
+        val_fract, test_fract = residue // 2, residue // 2
+        return train_fract, val_fract, test_fract, stride
+
+def plot_spectrogram(spectogram_tensor, patient):
+    spec_np = spectogram_tensor.cpu().numpy()
+    plt.figure(figsize=(10, 4))
+    plt.imshow(spec_np, aspect='auto', origin='lower', cmap='viridis')
+    plt.colorbar(format='%+2.0f dB')
+    plt.title(f'Mel Spectrogram: {patient}')
+    plt.xlabel('Time')
+    plt.ylabel('Mel Frequency')
+    plt.tight_layout()
+    plt.show()
+
+def create_tensors_mel(pX_train, device, order, labels):
     nr_recording_per_patient = 8
     spec = torch.load('data/spectrograms/AR_016_sit_Aor.pt', weights_only=True)
     height = spec.shape[0]              # 128
     width = spec.shape[1]               # 401
-    X = torch.zeros([108*nr_recording_per_patient, 1, height, width], dtype=torch.float32, device=device)
-    y = torch.zeros([108*nr_recording_per_patient, 5], dtype=torch.float32, device=device)
-    
-    train_csv = pd.read_csv('data/train.csv')
-    train = train_csv.to_numpy()
 
-    for row in range(train_csv.shape[0]):
-        labels = train[row, 1:6]
-        labels = torch.tensor(labels.astype(float), dtype=torch.float32)
-        labels = labels.reshape(1, -1)
-        for col, file_name in enumerate(train_csv.iloc[row, 6:]):
-            spectogram_tensor = torch.load(f"data/spectrograms/{file_name}.pt", weights_only=True)
-            X[8*row+col] = spectogram_tensor
-            y[8*row+col, :] = labels
+    X_train = torch.zeros([len(pX_train)*nr_recording_per_patient, 1, height, width], dtype=torch.float32, device=device)
+    y_train = torch.zeros([len(pX_train)*nr_recording_per_patient, 5], dtype=torch.float32, device=device)
+    for num, patient in enumerate(pX_train):
+        rec8 = order[patient]           # a list of the 8 recording names (strings)
+        disease4 = labels[patient]      # a list of 4 integers (diseases)
+        for idx, rec in enumerate(rec8):
+            spectogram_tensor = torch.load(f"data/spectrograms/{rec}.pt", weights_only=True)
+            X_train[8*num+idx, 0] = spectogram_tensor
+            y_train[8*num+idx] = torch.Tensor(np.array(disease4))
 
-             # Convert to numpy and use imshow
-            """
-            spec_np = spectogram_tensor.cpu().numpy()
-            plt.figure(figsize=(10, 4))
-            plt.imshow(spec_np, aspect='auto', origin='lower', cmap='viridis')
-            plt.colorbar(format='%+2.0f dB')
-            plt.title(f'Mel Spectrogram: {file_name}')
-            plt.xlabel('Time')
-            plt.ylabel('Mel Frequency')
-            plt.tight_layout()
-            plt.show()
-            """
-    
-    return X, y
+            #plot_spectrogram(spectogram_tensor, patient)
 
+    return X_train, y_train
+
+
+def create_tensors_meta(pX_train, device, metadata):
+    nr_recording_per_patient = 8
+    X_train = torch.zeros([len(pX_train)*nr_recording_per_patient, 4], dtype=torch.float32, device=device)
+
+    for num, patient in enumerate(pX_train):
+        meta4 = metadata[patient]           # a list of the 4 integers (metadata)
+        for col in range(8):                # stack 8 times vertically the same metadata for each patient
+            X_train[8*num+col] = torch.Tensor(np.array(meta4))
+
+
+    return X_train
+
+def create_train_val_test_split(split, stride_splits, device, iteration):
+    order, labels, _ = create_order()
+    patients = list(order.keys())
+    patients2 = patients + patients
+
+    fract_train, fract_val, fract_test, stride  = calc_fractions(patients, stride_splits, split)
+
+    pX_train = patients2[iteration*stride:(fract_train+iteration*stride)] # a list of the patient names used to construct X_train for this iteration
+    pX_val = patients2[(fract_train+iteration*stride):(fract_train+iteration*stride+fract_val)]
+    pX_test = patients2[(fract_train+iteration*stride+fract_val):(fract_train+iteration*stride+fract_val+fract_test)]
+
+    X_train, y_train = create_tensors_mel(pX_train, device, order, labels)
+    X_val, y_val = create_tensors_mel(pX_val, device, order, labels)
+    X_test, y_test = create_tensors_mel(pX_test, device, order, labels)
+
+    return X_train, y_train, X_val, y_val, X_test, y_test
+
+def create_simple(split, stride_splits, device, iteration):
+    order, _, metadata = create_order()
+    patients = list(order.keys())
+    patients2 = patients + patients
+
+    fract_train, fract_val, fract_test, stride  = calc_fractions(patients, stride_splits, split)
+
+    pX_train = patients2[iteration*stride:(fract_train+iteration*stride)] # a list of the patient names used to construct X_train for this iteration
+    pX_val = patients2[(fract_train+iteration*stride):(fract_train+iteration*stride+fract_val)]
+    pX_test = patients2[(fract_train+iteration*stride+fract_val):(fract_train+iteration*stride+fract_val+fract_test)]
+
+    X_train = create_tensors_meta(pX_train, device, metadata)
+    X_val = create_tensors_meta(pX_val, device, metadata)
+    X_test = create_tensors_meta(pX_test, device, metadata)
+
+    return X_train, X_val, X_test
 

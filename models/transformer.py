@@ -20,7 +20,7 @@ when generating the spectrograms, which corresponds at 4kHz sampling rate a hop 
 which is 400ms window --> transformer looks at frequency content of 400 ms)
 """
 patch_size = 8  # meaning sees 8 (8x8) pixels horizontally (in time) 1 pixel is 80000/200 = 400ms
-nr_tokens = ((401 - patch_size) // patch_size + 1) * ((128 - patch_size) // patch_size + 1)
+nr_tokens = ((401 - patch_size) // patch_size + 1) * ((64 - patch_size) // patch_size + 1)
 
 # Embedding for raw audio timeseries --> very noisy
 
@@ -135,7 +135,7 @@ def train_transformer(transformer, train_loader, val_loader, device, epochs = 15
         transformer.train()
         train_loss = 0
         total_train, correct_train = 0, 0
-        for x,y in train_loader:
+        for x,_,y in train_loader:
             x, y = x.to(device), y.to(device)
             preds = transformer(x)
             loss = criterion_train(preds, y)
@@ -160,7 +160,7 @@ def train_transformer(transformer, train_loader, val_loader, device, epochs = 15
         total_val, correct_val = 0, 0
         val_loss = 0
         with torch.no_grad():
-            for xv, yv in val_loader:
+            for xv, _, yv in val_loader:
                 xv, yv = xv.to(device), yv.to(device)
                 pred = transformer(xv)
                 lossv = criterion_val(pred, yv)

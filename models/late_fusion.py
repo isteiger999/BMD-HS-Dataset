@@ -25,7 +25,7 @@ class LateFusion(nn.Module):
 
    
     
-def train_lf(lf, device, train_loader, val_loader, train_loader2, val_loader2, epochs):
+def train_lf(lf, device, train_loader, val_loader, epochs):
     lf.transformer.eval()
     lf.ann.eval()
 
@@ -43,7 +43,8 @@ def train_lf(lf, device, train_loader, val_loader, train_loader2, val_loader2, e
         lf.train()
         train_loss = 0
         total_train, correct_train = 0, 0
-        for (x,y), (xs,_) in zip(train_loader, train_loader2):
+        #for (x,y), (xs,_) in zip(train_loader, train_loader2):
+        for x, xs, y in train_loader:
             x,y,xs = x.to(device), y.to(device), xs.to(device)
             preds = lf(x, xs)
             loss = criterion_train(preds, y)
@@ -65,7 +66,8 @@ def train_lf(lf, device, train_loader, val_loader, train_loader2, val_loader2, e
         val_loss = 0
         correct_val, total_val = 0, 0
         with torch.no_grad():
-            for (xv,yv), (xsv,_) in zip(val_loader, val_loader2):
+            #for (xv,yv), (xsv,_) in zip(val_loader, val_loader2):
+            for xv,xsv,yv in val_loader:
                 xv, xsv, yv = xv.to(device), xsv.to(device), yv.to(device)
                 preds = lf(xv, xsv)
                 loss = criterion_val(preds, yv)

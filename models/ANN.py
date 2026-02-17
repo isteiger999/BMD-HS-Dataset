@@ -39,7 +39,7 @@ def train_ann(ann, device, train_loader, val_loader, epochs):
         ann.train()
         train_loss = 0
         total_train, correct_train = 0, 0
-        for x,y in train_loader:
+        for x,_,y in train_loader:
             x, y = x.to(device), y.to(device)
             preds = ann(x)
             loss = criterion_train(preds, y)
@@ -65,7 +65,7 @@ def train_ann(ann, device, train_loader, val_loader, epochs):
         val_loss = 0
 
         with torch.no_grad():
-            for xv, yv in val_loader:
+            for xv,_,yv in val_loader:
                 xv, yv = x.to(device), y.to(device)
                 pred = ann(xv)
                 loss = criterion_val(pred, yv)
