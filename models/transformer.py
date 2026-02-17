@@ -120,7 +120,7 @@ class Transformer(nn.Module):
 
 
 def train_transformer(transformer, train_loader, val_loader, device, epochs = 150):
-    optimizer = optim.Adam(transformer.parameters(), lr = 5e-4, weight_decay=1e-3)
+    optimizer = optim.Adam(transformer.parameters(), lr = 5e-4, weight_decay=1e-4)
     weights = torch.tensor([0.1795, 0.1545, 0.1748, 0.1748, 0.3161]).to(device)
     criterion_train = nn.BCEWithLogitsLoss(weight=weights)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=5, factor=0.5, min_lr=5e-6)

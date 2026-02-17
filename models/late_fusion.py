@@ -29,7 +29,7 @@ def train_lf(lf, device, train_loader, val_loader, epochs):
     lf.transformer.eval()
     lf.ann.eval()
 
-    optimizer = optim.Adam(lf.parameters(), lr=1e-4, weight_decay=1e-5)
+    optimizer = optim.Adam(lf.parameters(), lr=5e-4, weight_decay=5e-5)
     criterion_train = nn.BCEWithLogitsLoss()
     criterion_val = nn.BCEWithLogitsLoss()
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=5, factor = 0.5, min_lr=5e-6)
