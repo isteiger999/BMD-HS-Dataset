@@ -99,14 +99,14 @@ def train_lf(lf, device, train_loader, val_loader, epochs):
 
 
 
-def test_lf(lf, val_loader, val_loader2, device, metrics):
+def test_lf(lf, val_loader, device, metrics):
     lf.eval()
     criterion_val = nn.BCEWithLogitsLoss()
     total_val, correct_val = 0, 0
     val_loss = 0
 
     with torch.no_grad():
-        for (xv, yv), (xsv, _) in zip(val_loader, val_loader2):
+        for xv, xsv, yv in val_loader:
             xv, yv, xsv = xv.to(device), yv.to(device), xsv.to(device)
             pred = lf(xv, xsv)
             loss = criterion_val(pred, yv)

@@ -188,7 +188,7 @@ def train_transformer(transformer, train_loader, val_loader, device, epochs = 15
                     transformer.load_state_dict(best_state)
                 break
 
-        print(f"Trans Epoch {epoch}: train_acc: {round(train_acc, 2)} || train_loss: {round(train_loss, 3)} || val_acc: {round(val_acc, 2)} || val_loss: {round(val_loss, 3)}, lr: {optimizer.param_groups[0]['lr']:.6f}")
+        print(f"Trans Epoch {epoch}: train_acc: {round(train_acc, 2)} || train_loss: {round(train_loss, 3)} || val_acc: {round(val_acc, 2)} || val_loss: {round(val_loss, 4)}, lr: {optimizer.param_groups[0]['lr']:.6f}")
 
 def test_transformer(transformer, val_loader, device, metrics):
     transformer.eval()

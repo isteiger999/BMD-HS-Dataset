@@ -14,10 +14,7 @@ class ANN(nn.Module):
         self.mlp = nn.Sequential(
             nn.Linear(4, 128),
             nn.ReLU(),
-            nn.Dropout(p=0.2),
-            nn.Linear(128,128),
-            nn.ReLU(),
-            nn.Dropout(p=0.2),
+            nn.Dropout(p=0.3),
             nn.Linear(128,n_classes)
         )
     
@@ -26,7 +23,7 @@ class ANN(nn.Module):
         return meta_logits
     
 def train_ann(ann, device, train_loader, val_loader, epochs):
-    optimizer = optim.Adam(ann.parameters(), lr=1e-3, weight_decay=5e-4)
+    optimizer = optim.Adam(ann.parameters(), lr=5e-4, weight_decay=5e-4)
     criterion_train = nn.BCEWithLogitsLoss()
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=5, factor=0.5, min_lr=5e-6)
 
@@ -39,7 +36,7 @@ def train_ann(ann, device, train_loader, val_loader, epochs):
         ann.train()
         train_loss = 0
         total_train, correct_train = 0, 0
-        for x,_,y in train_loader:
+        for _,x,y in train_loader:
             x, y = x.to(device), y.to(device)
             preds = ann(x)
             loss = criterion_train(preds, y)
@@ -52,9 +49,8 @@ def train_ann(ann, device, train_loader, val_loader, epochs):
             probs = torch.sigmoid(preds)
             y_pred = (probs > 0.5).int()
             for row in range(x.shape[0]):
-                if torch.equal(y_pred[row, :], y[row, :]):
-                    correct_train += 1
-        
+                correct_train += (y_pred[row,:] == y[row,:]).float().mean().item()
+
         train_loss /= total_train
         acc_train = correct_train/total_train
 
@@ -65,7 +61,7 @@ def train_ann(ann, device, train_loader, val_loader, epochs):
         val_loss = 0
 
         with torch.no_grad():
-            for xv,_,yv in val_loader:
+            for _,xv,yv in val_loader:
                 xv, yv = x.to(device), y.to(device)
                 pred = ann(xv)
                 loss = criterion_val(pred, yv)
