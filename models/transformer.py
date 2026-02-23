@@ -5,6 +5,7 @@ import torch.nn.functional as F
 import math
 import copy
 from models.ANN import ANN
+from sklearn.metrics import f1_score
 
 
 num_channels = 1
@@ -27,33 +28,34 @@ nr_tokens = ((401 - patch_size) // patch_size + 1) * ((64 - patch_size) // patch
 class EmbeddingSpectograms(nn.Module):
     def __init__(self):
         super().__init__()
-        # Each patch is (patch_size x patch_size). 
-        # For a grayscale spectrogram (1 channel), the input features are patch_size^2.
         self.projection = nn.Linear(patch_size * patch_size, embed_dim)
 
     def forward(self, x):
-        # x shape: [B, 1, 128, 401]
-        B, C, H, W = x.shape
+        # x shape: [B, 8, 1, 128, 401]
+        B, R, C, H, W = x.shape
         
-        # 1. Crop the spectrogram so it's perfectly divisible by patch_size
-        # (401 becomes 400, 128 is already divisible by 8)
+        # 1. Flatten B and R into a single batch dimension
+        # New shape: [B*8, 1, 128, 401]
+        x = x.view(B * R, C, H, W)
+        
+        # 2. Crop to be divisible by patch_size (400, 128)
         H_new = (H // patch_size) * patch_size
         W_new = (W // patch_size) * patch_size
         x = x[:, :, :H_new, :W_new]
         
-        # 2. Use unfold to extract patches manually
-        # This creates a tensor of patches: [B, 1, H/p, W/p, p, p]
+        # 3. Extract patches
+        # unfold(2, ...) handles H, unfold(3, ...) handles W
         x = x.unfold(2, patch_size, patch_size).unfold(3, patch_size, patch_size)
         
-        # 3. Reshape and flatten the patches
-        # We want: [Batch, Number_of_Patches, Patch_Pixels]
-        x = x.contiguous().view(B, -1, patch_size * patch_size)
+        # 4. Reshape to [Total_Batch, nr_tokens, patch_size^2]
+        # Total_Batch is B*8
+        x = x.contiguous().view(B * R, -1, patch_size * patch_size)
         
-        # 4. Project pixels to embed_dim
-        x = self.projection(x) # Result: [B, Tokens, Embed_Dim]
+        # 5. Project to embed_dim
+        x = self.projection(x) # Result: [B*8, Tokens, Embed_Dim]
         
         return x
-
+    
 
 class TransformerEncoder(nn.Module):
     def __init__(self):
@@ -105,7 +107,9 @@ class Transformer(nn.Module):
         self.position_embedding = nn.Parameter(torch.randn(1, nr_tokens+1, embed_dim))
         self.transformer_block = nn.Sequential(*[TransformerEncoder() for _ in range(transformer_blocks)])
         self.mlp_head = MLP_Head()
-
+        self.threshhold = nn.Parameter(torch.Tensor([0.5, 0.5, 0.5, 0.5, 0.5]))
+        self.steepness = 1.5
+    
     def forward(self, x):
         x = self.embedding(x)
         B = x.shape[0]
@@ -116,18 +120,26 @@ class Transformer(nn.Module):
         x = self.transformer_block(x)
         x = x[:, 0].contiguous()  # meaning first row (cls token) of every datapoint in the batch
         x = self.mlp_head(x)
+        #reshape
+        x = x.view(-1,8,5)
+        x = torch.mean(x, dim=1)
+        
+        #return torch.sigmoid(self.steepness * (x - self.threshhold))
         return x
 
 
+
 def train_transformer(transformer, train_loader, val_loader, device, epochs = 150):
-    optimizer = optim.Adam(transformer.parameters(), lr = 5e-4, weight_decay=1e-4)
-    weights = torch.tensor([0.1795, 0.1545, 0.1748, 0.1748, 0.3161]).to(device)
-    criterion_train = nn.BCEWithLogitsLoss(weight=weights)
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=5, factor=0.5, min_lr=5e-6)
+    optimizer = optim.Adam(transformer.parameters(), lr = 1e-3, weight_decay=1e-5)
+    #weights = torch.tensor([0.1795, 0.1545, 0.1748, 0.1748, 0.3161]).to(device)
+    weights = torch.tensor([1.9189189189189189, 1.5116279069767442, 1.8421052631578947, 1.8421052631578947, 4.142857142857143]).to(device)
+    criterion_train = nn.BCEWithLogitsLoss(pos_weight=weights)
+    criterion_val = nn.BCEWithLogitsLoss(pos_weight=weights)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=5, factor=0.5, min_lr=5e-6)    # 'min'
 
     # for early stopping
     early_st_patience = 10
-    best_val = math.inf
+    best_val = -math.inf
     bad_epochs = 0
     best_state = None
 
@@ -135,50 +147,65 @@ def train_transformer(transformer, train_loader, val_loader, device, epochs = 15
         transformer.train()
         train_loss = 0
         total_train, correct_train = 0, 0
+
+        # preparation for F1 score:
+        all_preds, all_labels = [], []
         for x,_,y in train_loader:
             x, y = x.to(device), y.to(device)
-            preds = transformer(x)
-            loss = criterion_train(preds, y)
+            preds = transformer(x)   # preds shape = (B*8, 5)
+            loss = criterion_train(preds, y) # loss = criterion_train(preds, y)
             train_loss += loss.item()
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
             
-            total_train += x.shape[0]
-            y_pred = torch.sigmoid(preds)
-            y_pred = (y_pred > 0.5).int()
-            for row in range(x.shape[0]):
-                correct_train += (y_pred[row, :] == y[row, :]).float().mean().item()
+            total_train += (x.shape[0])
+            y_pred = (torch.sigmoid(preds) > 0.5).int()
+            for row in range(int(x.shape[0])): 
+                correct_train += (y_pred[row, :] == y[row, :]).float().mean().item() # bc. y_pred now only has one column
+            
+            all_preds.append(y_pred.detach().cpu())
+            all_labels.append(y.detach().cpu())
 
 
+        y_pred_mt = torch.cat(all_preds).numpy()
+        y_mt = torch.cat(all_labels).numpy()
+        f1_train = f1_score(y_mt, y_pred_mt, average='macro')
         train_loss /= total_train
         train_acc = correct_train / total_train
 
         # lr scheduler
         transformer.eval()
-        criterion_val = nn.BCEWithLogitsLoss()
         total_val, correct_val = 0, 0
         val_loss = 0
+        
+        # preparation for F1 score calculation
+        all_predsv, all_labelsv = [], []
         with torch.no_grad():
             for xv, _, yv in val_loader:
                 xv, yv = xv.to(device), yv.to(device)
-                pred = transformer(xv)
-                lossv = criterion_val(pred, yv)
+                pred = transformer(xv)            
+                lossv = criterion_val(pred, yv)   #lossv = criterion_val(pred, yv)
                 val_loss += lossv.item()
-                y_pred = torch.sigmoid(pred)
-                y_pred = (y_pred > 0.5).int()
+                y_predv = (torch.sigmoid(pred) > 0.5).int() ##
+
+                total_val += (xv.shape[0])
+                for row in range(int(xv.shape[0])): 
+                    correct_val += (y_predv[row, :] == yv[row, :]).float().mean().item() # bc. y_pred now only has one column
+
+                all_predsv.append(y_predv.detach().cpu())
+                all_labelsv.append(yv.detach().cpu())
                 
-                total_val += xv.shape[0]
-                for row in range(xv.shape[0]):
-                    correct_val += (y_pred[row, :] == yv[row, :]).float().mean().item()
-                    
+        y_pred_mv = torch.cat(all_predsv).numpy()
+        y_mv = torch.cat(all_labelsv).numpy()
+        f1_val = f1_score(y_mv, y_pred_mv, average='macro')                        
         val_loss /= total_val
         val_acc = correct_val / total_val
         scheduler.step(val_loss)
 
         # early stopping
-        if val_loss < best_val:
-            best_val = val_loss
+        if f1_val > best_val: # val_loss <
+            best_val = f1_val # val_loss
             bad_epochs = 0
             best_state = copy.deepcopy(transformer.state_dict())
         else:
@@ -188,33 +215,6 @@ def train_transformer(transformer, train_loader, val_loader, device, epochs = 15
                     transformer.load_state_dict(best_state)
                 break
 
-        print(f"Trans Epoch {epoch}: train_acc: {round(train_acc, 2)} || train_loss: {round(train_loss, 3)} || val_acc: {round(val_acc, 2)} || val_loss: {round(val_loss, 4)}, lr: {optimizer.param_groups[0]['lr']:.6f}")
-
-def test_transformer(transformer, val_loader, device, metrics):
-    transformer.eval()
-    criterion_val = nn.BCEWithLogitsLoss()
-    total_val, correct_val = 0, 0
-    val_loss = 0
-
-    with torch.no_grad():
-        for xv, yv in val_loader:
-            xv, yv = xv.to(device), yv.to(device)
-            pred = transformer(xv)
-            loss = criterion_val(pred, yv)
-            val_loss += loss.item()
-            y_pred = torch.sigmoid(pred)
-            y_pred = (y_pred > 0.5).int()
-            
-            total_val += xv.shape[0]
-            for row in range(xv.shape[0]):
-                correct_val += (y_pred[row,:]==yv[row,:]).float().mean().item()
-                
-    val_loss /= total_val
-    val_acc = correct_val / total_val
-
-    metrics["Final_loss"].append(val_loss)
-    metrics["Acc"].append(val_acc)
-
-    return metrics
+        print(f"Trans Epoch {epoch}: train_acc: {round(train_acc, 2)} || f1_train: {round(f1_train, 2)} || train_loss: {round(train_loss, 2)} || val_acc: {round(val_acc, 2)} || f1_val: {round(f1_val, 2)} || val_loss: {round(val_loss, 2)}, lr: {optimizer.param_groups[0]['lr']:.6f}")
 
 

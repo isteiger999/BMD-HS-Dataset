@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 import math
 from torch.utils.data import DataLoader, TensorDataset
-import librosa
 import matplotlib.pyplot as plt
 from scipy import signal
 import random
@@ -31,9 +30,9 @@ def loaders(X_train, y_train, X_val, y_val, X_test, y_test, Xs_train, Xs_val, Xs
     val_ds = TensorDataset(X_val.float(), Xs_val.float(), y_val.squeeze())
     test_ds = TensorDataset(X_test.float(), Xs_test.float(), y_test.squeeze())
     
-    train_loader = DataLoader(train_ds, batch_size=32, shuffle=True) # shuffle = True
-    val_loader = DataLoader(val_ds, batch_size=32, shuffle=False)
-    test_loader = DataLoader(test_ds, batch_size=32, shuffle=False)
+    train_loader = DataLoader(train_ds, batch_size=4, shuffle=True) # shuffle = True
+    val_loader = DataLoader(val_ds, batch_size=4, shuffle=False)
+    test_loader = DataLoader(test_ds, batch_size=4, shuffle=False)
 
     return train_loader, val_loader, test_loader
 
@@ -52,12 +51,15 @@ def calc_mean_std(list):
 def mean_std(metrics):
     list_loss = metrics["Final_loss"]
     list_acc = metrics["Acc"]
+    list_f1 = metrics["F1"]
 
     mu_loss, std_loss = calc_mean_std(list_loss)
     mu_acc, std_acc = calc_mean_std(list_acc)
+    mu_f1, std_f1 = calc_mean_std(list_f1)
 
     print(f"Final Loss: {mu_loss}\u00B1{std_loss}")
     print(f"Final Acc: {mu_acc}\u00B1{std_acc}")
+    print(f"Final Acc: {mu_f1}\u00B1{std_f1}")
 
 
 def fix_length(wav_file):
@@ -150,29 +152,25 @@ def create_tensors_mel(pX_train, device, order, labels):
     height = spec.shape[0]              # 128
     width = spec.shape[1]               # 401
 
-    X_train = torch.zeros([len(pX_train)*nr_recording_per_patient, 1, height, width], dtype=torch.float32, device=device)
-    y_train = torch.zeros([len(pX_train)*nr_recording_per_patient, 5], dtype=torch.float32, device=device)
+    X_train = torch.zeros([len(pX_train), nr_recording_per_patient, 1, height, width], dtype=torch.float32, device=device)
+    y_train = torch.zeros([len(pX_train), 5], dtype=torch.float32, device=device)
     for num, patient in enumerate(pX_train):
         rec8 = order[patient]           # a list of the 8 recording names (strings)
-        disease4 = labels[patient]      # a list of 4 integers (diseases)
+        disease5 = labels[patient]      # a list of 4 integers (diseases)
         for idx, rec in enumerate(rec8):
             spectogram_tensor = torch.load(f"data/spectrograms/{rec}.pt", weights_only=True)
-            X_train[8*num+idx, 0] = spectogram_tensor
-            y_train[8*num+idx] = torch.Tensor(np.array(disease4))
-
+            X_train[num,idx, 0] = spectogram_tensor
             #plot_spectrogram(spectogram_tensor, patient)
+        y_train[num, :] = torch.Tensor(np.array(disease5))
 
     return X_train, y_train
 
-
 def create_tensors_meta(pX_train, device, metadata):
-    nr_recording_per_patient = 8
-    X_train = torch.zeros([len(pX_train)*nr_recording_per_patient, 4], dtype=torch.float32, device=device)
+    X_train = torch.zeros([len(pX_train), 4], dtype=torch.float32, device=device)
 
     for num, patient in enumerate(pX_train):
         meta4 = metadata[patient]           # a list of the 4 integers (metadata)
-        for col in range(8):                # stack 8 times vertically the same metadata for each patient
-            X_train[8*num+col] = torch.Tensor(np.array(meta4))
+        X_train[num] = torch.Tensor(np.array(meta4))
 
 
     return X_train
@@ -211,3 +209,21 @@ def create_simple(split, stride_splits, device, iteration):
 
     return X_train, X_val, X_test
 
+## calculate pos_weight parameter for optimizer
+def pos_weight_calc():
+    # definition: pos_weight = (#0)/(#1)
+    df = pd.read_csv(r"data/train.csv")
+    df = df[["AS","AR","MR","MS","N"]]
+    
+    pos_weights = []
+    for col in range(df.shape[1]):
+        column = df.iloc[:, col]
+        column = np.array(column, dtype=np.int32)
+        ones = np.sum(column)
+        zeros = 108 - ones
+        pos_weight = zeros/ones
+        pos_weights.append(pos_weight)
+
+    print(pos_weights)
+
+# pos_weight_calc()
