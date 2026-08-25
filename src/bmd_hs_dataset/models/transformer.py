@@ -4,7 +4,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 import math
 import copy
-from models.ANN import ANN
+from bmd_hs_dataset.models.ANN import ANN
 from sklearn.metrics import f1_score
 
 

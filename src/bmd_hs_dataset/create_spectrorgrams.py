@@ -1,16 +1,16 @@
 import torch, librosa
-from data_loader import fix_length
+from bmd_hs_dataset.data_loader import fix_length
 import pandas as pd
 import torchaudio
 from torchaudio import transforms
 import os
 
-output_dir = "src/data/spectrograms"
+output_dir = "src/bmd_hs_dataset/data/spectrograms"
 os.makedirs(output_dir, exist_ok=True)
 
 def create_spectrograms():
 
-    train_csv = pd.read_csv('src/data/train.csv')
+    train_csv = pd.read_csv('src/bmd_hs_dataset/data/train.csv')
     transform = transforms.MelSpectrogram(
         sample_rate=4000,
         n_fft=2048,          # (old: 4096) n_fft >=! win_length (if greater, then adds zeros padding to the end of the window)
@@ -24,7 +24,7 @@ def create_spectrograms():
 
     for row in range(train_csv.shape[0]):
         for _, file_name in enumerate(train_csv.iloc[row, 6:]):
-            wav_file, _ =  torchaudio.load(f'src/data/train/{file_name}.wav', normalize=True)
+            wav_file, _ =  torchaudio.load(f'src/bmd_hs_dataset/data/train/{file_name}.wav', normalize=True)
             wav_file = wav_file.squeeze(0)
             if wav_file.shape[0] != 80000:
                 wav_file = fix_length(wav_file)

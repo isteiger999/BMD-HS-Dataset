@@ -92,8 +92,8 @@ def create_order() -> tuple[dict, dict, dict]:
     metadata: keys are patient names, values are lists of the 4 metadata labels (integers)
     '''
     order, labels, metadata = {}, {}, {}
-    train_csv = pd.read_csv(f"src/data/train.csv")
-    meta_csv = number(pd.read_csv(f"src/data/additional_metadata.csv")) # number is my own function which converts characters to 0/1
+    train_csv = pd.read_csv(f"src/bmd_hs_dataset/data/train.csv")
+    meta_csv = number(pd.read_csv(f"src/bmd_hs_dataset/data/additional_metadata.csv")) # number is my own function which converts characters to 0/1
 
     patients = train_csv["patient_id"].tolist()
     rec_names = train_csv.drop(["AS", "AR", "MR", "MS" ,"N"], axis=1)
@@ -154,7 +154,7 @@ def plot_spectrogram(spectogram_tensor, patient):
 
 def create_tensors_mel(pX_train, device, order, labels):
     nr_recording_per_patient = 8
-    spec = torch.load('src/data/spectrograms/AR_016_sit_Aor.pt', weights_only=True)
+    spec = torch.load('src/bmd_hs_dataset/data/spectrograms/AR_016_sit_Aor.pt', weights_only=True)
     height = spec.shape[0]              # 128
     width = spec.shape[1]               # 401
 
@@ -164,9 +164,9 @@ def create_tensors_mel(pX_train, device, order, labels):
         rec8 = order[patient]           # a list of the 8 recording names (strings)
         disease5 = labels[patient]      # a list of 4 integers (diseases)
         for idx, rec in enumerate(rec8):
-            spectogram_tensor = torch.load(f"src/data/spectrograms/{rec}.pt", weights_only=True)
+            spectogram_tensor = torch.load(f"src/bmd_hs_dataset/data/spectrograms/{rec}.pt", weights_only=True)
             X_train[num,idx, 0] = spectogram_tensor
-            plot_spectrogram(spectogram_tensor, patient)
+            #plot_spectrogram(spectogram_tensor, patient)
         y_train[num, :] = torch.Tensor(np.array(disease5))
 
     return X_train, y_train

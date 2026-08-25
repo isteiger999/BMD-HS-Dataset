@@ -1,8 +1,8 @@
 import torch
-from data_loader import loaders, mean_std, ensure_deterministic, create_train_val_test_split, create_simple
-from models.transformer import Transformer, train_transformer
-from models.late_fusion import LateFusion, train_lf, test_lf
-from models.ANN import ANN, train_ann
+from bmd_hs_dataset.data_loader import loaders, mean_std, ensure_deterministic, create_train_val_test_split, create_simple
+from bmd_hs_dataset.models.transformer import Transformer, train_transformer
+from bmd_hs_dataset.models.late_fusion import LateFusion, train_lf, test_lf
+from bmd_hs_dataset.models.ANN import ANN, train_ann
 
 
 def main():
