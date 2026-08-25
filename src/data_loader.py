@@ -17,9 +17,9 @@ def number(df_x):
     map_home = {'U': 0, 'R': 1}
 
     df_x = df_x.copy()
-
-    df_x.iloc[:, 2] = df_x.iloc[:, 2].map(map_gender)
-    df_x.iloc[:, 4] = df_x.iloc[:, 4].map(map_home)
+    # Convert Gender strings to integers (M=0, F=1) and Home strings to integers (U=0, R=1)
+    df_x['Gender'] = df_x['Gender'].map(map_gender)
+    df_x['Lives'] = df_x['Lives'].map(map_home)
 
     df_x = df_x.apply(pd.to_numeric, errors='coerce')
         
@@ -59,7 +59,7 @@ def mean_std(metrics):
 
     print(f"Final Loss: {mu_loss}\u00B1{std_loss}")
     print(f"Final Acc: {mu_acc}\u00B1{std_acc}")
-    print(f"Final Acc: {mu_f1}\u00B1{std_f1}")
+    print(f"Final F1: {mu_f1}\u00B1{std_f1}")
 
 
 def fix_length(wav_file):
@@ -84,10 +84,16 @@ def filter(wav_file):
 
 ####### COMPUTER VISION APPROACH USING SPECTROGRAMS ###########
 
-def create_order():
+def create_order() -> tuple[dict, dict, dict]:
+    '''
+    Returns three dictionaries: order, labels, metadata.
+    order: keys are patient names, values are lists of the 8 recording names (strings)
+    labels: keys are patient names, values are lists of the 5 disease labels (integers)
+    metadata: keys are patient names, values are lists of the 4 metadata labels (integers)
+    '''
     order, labels, metadata = {}, {}, {}
-    train_csv = pd.read_csv(f"data/train.csv")
-    meta_csv = number(pd.read_csv(f"data/additional_metadata.csv")) # number is my own function which converts characters to 0/1
+    train_csv = pd.read_csv(f"src/data/train.csv")
+    meta_csv = number(pd.read_csv(f"src/data/additional_metadata.csv")) # number is my own function which converts characters to 0/1
 
     patients = train_csv["patient_id"].tolist()
     rec_names = train_csv.drop(["AS", "AR", "MR", "MS" ,"N"], axis=1)
@@ -98,7 +104,7 @@ def create_order():
         labels[patient] = []
         metadata[patient] = []
     
-    # 2. Add all 8 recording names as values to each patient a
+    # 2. Add all 8 recording names as values to each patient
     for row, patient in enumerate(patients):
         for col in range(8):
             rec_name = rec_names.iloc[row, col+1] # col+1 because first column is patient name
@@ -120,7 +126,7 @@ def create_order():
 
     return order, labels, metadata
 
-def calc_fractions(patients, stride, split):
+def calc_fractions(patients: list[str], stride: float, split: list) -> tuple[int, int, int, int]:
     patients_tot = int(len(patients)) # 108
     train_fract = int(split[0] * patients_tot - 0.5)
     stride = math.floor(stride * patients_tot)
@@ -148,7 +154,7 @@ def plot_spectrogram(spectogram_tensor, patient):
 
 def create_tensors_mel(pX_train, device, order, labels):
     nr_recording_per_patient = 8
-    spec = torch.load('data/spectrograms/AR_016_sit_Aor.pt', weights_only=True)
+    spec = torch.load('src/data/spectrograms/AR_016_sit_Aor.pt', weights_only=True)
     height = spec.shape[0]              # 128
     width = spec.shape[1]               # 401
 
@@ -158,9 +164,9 @@ def create_tensors_mel(pX_train, device, order, labels):
         rec8 = order[patient]           # a list of the 8 recording names (strings)
         disease5 = labels[patient]      # a list of 4 integers (diseases)
         for idx, rec in enumerate(rec8):
-            spectogram_tensor = torch.load(f"data/spectrograms/{rec}.pt", weights_only=True)
+            spectogram_tensor = torch.load(f"src/data/spectrograms/{rec}.pt", weights_only=True)
             X_train[num,idx, 0] = spectogram_tensor
-            #plot_spectrogram(spectogram_tensor, patient)
+            plot_spectrogram(spectogram_tensor, patient)
         y_train[num, :] = torch.Tensor(np.array(disease5))
 
     return X_train, y_train
@@ -176,7 +182,7 @@ def create_tensors_meta(pX_train, device, metadata):
     return X_train
 
 def create_train_val_test_split(split, stride_splits, device, iteration):
-    order, labels, _ = create_order()
+    order, labels, metadata = create_order()
     patients = list(order.keys())
     patients2 = patients + patients
 
