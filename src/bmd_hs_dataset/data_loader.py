@@ -152,36 +152,40 @@ def plot_spectrogram(spectogram_tensor, patient):
     plt.tight_layout()
     plt.show()
 
-def create_tensors_mel(pX_train, device, order, labels):
+def create_tensors_mel(pX_train: list[str], device: torch.device, 
+                       order: dict[str, list[str]], 
+                       labels: dict[str, list[int]])-> tuple[torch.Tensor, torch.Tensor]:
     nr_recording_per_patient = 8
     spec = torch.load('src/bmd_hs_dataset/data/spectrograms/AR_016_sit_Aor.pt', weights_only=True)
     height = spec.shape[0]              # 128
     width = spec.shape[1]               # 401
 
-    X_train = torch.zeros([len(pX_train), nr_recording_per_patient, 1, height, width], dtype=torch.float32, device=device)
-    y_train = torch.zeros([len(pX_train), 5], dtype=torch.float32, device=device)
+    X_train = torch.zeros([len(pX_train)*nr_recording_per_patient, 1, height, width], dtype=torch.float32, device=device)
+    y_train = torch.zeros([len(pX_train)*nr_recording_per_patient, 5], dtype=torch.float32, device=device)
     for num, patient in enumerate(pX_train):
         rec8 = order[patient]           # a list of the 8 recording names (strings)
         disease5 = labels[patient]      # a list of 4 integers (diseases)
         for idx, rec in enumerate(rec8):
             spectogram_tensor = torch.load(f"src/bmd_hs_dataset/data/spectrograms/{rec}.pt", weights_only=True)
-            X_train[num,idx, 0] = spectogram_tensor
+            X_train[num+idx, 0] = spectogram_tensor
+            y_train[num+idx, :] = torch.Tensor(np.array(disease5))
             #plot_spectrogram(spectogram_tensor, patient)
-        y_train[num, :] = torch.Tensor(np.array(disease5))
 
     return X_train, y_train
 
 def create_tensors_meta(pX_train, device, metadata):
-    X_train = torch.zeros([len(pX_train), 4], dtype=torch.float32, device=device)
+    recording_per_patient = 8
+    X_train = torch.zeros([len(pX_train)*recording_per_patient, 4], dtype=torch.float32, device=device)
 
     for num, patient in enumerate(pX_train):
         meta4 = metadata[patient]           # a list of the 4 integers (metadata)
-        X_train[num] = torch.Tensor(np.array(meta4))
+        X_train[num:num+recording_per_patient] = torch.Tensor(np.array(meta4))
 
 
     return X_train
 
-def create_train_val_test_split(split, stride_splits, device, iteration):
+def create_train_val_test_split(split: list[float], stride_splits: float, device: torch.device, 
+                                iteration: int)-> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     order, labels, metadata = create_order()
     patients = list(order.keys())
     patients2 = patients + patients

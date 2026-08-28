@@ -34,7 +34,7 @@ def train_lf(lf, device, train_loader, val_loader, epochs):
     lf.transformer.eval()
     lf.ann.eval()
 
-    optimizer = optim.Adam(lf.parameters(), lr = 1e-3, weight_decay=1e-5)
+    optimizer = optim.Adam(lf.parameters(), lr = 5e-4, weight_decay=1e-5)
     weights = torch.tensor([1.9189189189189189, 1.5116279069767442, 1.8421052631578947, 1.8421052631578947, 4.142857142857143]).to(device)
     criterion_train = nn.BCEWithLogitsLoss(pos_weight=weights)
     criterion_val = nn.BCEWithLogitsLoss(pos_weight=weights)
@@ -58,7 +58,7 @@ def train_lf(lf, device, train_loader, val_loader, epochs):
             loss = criterion_train(preds, y)
             train_loss += loss.item()
             optimizer.zero_grad()
-            loss.backward()
+            loss.backward(retain_graph=True)
             optimizer.step()
 
             total_train += x.shape[0]

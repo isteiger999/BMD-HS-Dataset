@@ -13,7 +13,7 @@ num_recordings = 8
 embed_dim = 256
 num_classes = 5
 attention_heads = 4
-transformer_blocks = 6
+transformer_blocks = 4 #6
 mlp_nodes = 512
 """
 patch size: 1 pixel in the spectrogram in horizontal direction corresponds to 50 ms (since we used hop_length=200pixels
@@ -31,27 +31,23 @@ class EmbeddingSpectograms(nn.Module):
         self.projection = nn.Linear(patch_size * patch_size, embed_dim)
 
     def forward(self, x):
-        # x shape: [B, 8, 1, 128, 401]
-        B, R, C, H, W = x.shape
+        # x shape: [B:32, Channels:1, Height:64, Width:401]
+        B, C, H, W = x.shape
         
-        # 1. Flatten B and R into a single batch dimension
-        # New shape: [B*8, 1, 128, 401]
-        x = x.view(B * R, C, H, W)
-        
-        # 2. Crop to be divisible by patch_size (400, 128)
+        # 1. Crop to be divisible by patch_size (64, 401)->(64, 400)
         H_new = (H // patch_size) * patch_size
         W_new = (W // patch_size) * patch_size
         x = x[:, :, :H_new, :W_new]
         
-        # 3. Extract patches
+        # 2. Extract patches
         # unfold(2, ...) handles H, unfold(3, ...) handles W
         x = x.unfold(2, patch_size, patch_size).unfold(3, patch_size, patch_size)
         
-        # 4. Reshape to [Total_Batch, nr_tokens, patch_size^2]
+        # 3. Reshape to [Total_Batch, nr_tokens, patch_size^2]
         # Total_Batch is B*8
-        x = x.contiguous().view(B * R, -1, patch_size * patch_size)
+        x = x.contiguous().view(B, -1, patch_size * patch_size)
         
-        # 5. Project to embed_dim
+        # 4. Project to embed_dim
         x = self.projection(x) # Result: [B*8, Tokens, Embed_Dim]
         
         return x
@@ -62,12 +58,12 @@ class TransformerEncoder(nn.Module):
         super().__init__()
         self.ln1 = nn.LayerNorm(embed_dim)
         self.multi_head_attention = nn.MultiheadAttention(embed_dim, attention_heads, batch_first=True) # batch_first=False
-        self.dropout = nn.Dropout(p=0.2)
+        self.dropout = nn.Dropout(p=0.1)
         self.ln2 = nn.LayerNorm(embed_dim)
         self.mlp = nn.Sequential(
             nn.Linear(embed_dim, mlp_nodes),
             nn.GELU(),
-            nn.Dropout(p=0.2),
+            nn.Dropout(p=0.1),
             nn.Linear(mlp_nodes, embed_dim)
         )
 
@@ -85,7 +81,7 @@ class MLP_Head(nn.Module):
     def __init__(self):
         super().__init__()
         self.ln1 = nn.LayerNorm(embed_dim)          # takes in cls token only
-        self.dropout = nn.Dropout(p=0.2)
+        self.dropout = nn.Dropout(p=0.1)
         self.fc1 = nn.Linear(embed_dim, mlp_nodes)
         self.fc2 = nn.Linear(mlp_nodes, mlp_nodes)
         self.fc3 = nn.Linear(mlp_nodes, num_classes)
@@ -99,30 +95,44 @@ class MLP_Head(nn.Module):
         return x
     
 class Transformer(nn.Module):
-    def __init__(self):
+    def __init__(self, device):
         super().__init__()
         #self.embedding = PatchEmbedding(nr_windows)
         self.embedding = EmbeddingSpectograms()
-        self.cls_token = nn.Parameter(torch.randn(1,1,embed_dim))
-        self.position_embedding = nn.Parameter(torch.randn(1, nr_tokens+1, embed_dim))
+        self.cls_token = nn.Parameter(torch.randn(1,1,embed_dim)).to(device)
+        self.position_embedding = 0.02 * nn.Parameter(torch.randn(1, nr_tokens+1, embed_dim)).to(device)      # factor 0.02 for stability reasons
         self.transformer_block = nn.Sequential(*[TransformerEncoder() for _ in range(transformer_blocks)])
         self.mlp_head = MLP_Head()
         self.threshhold = nn.Parameter(torch.Tensor([0.5, 0.5, 0.5, 0.5, 0.5]))
         self.steepness = 1.5
     
     def forward(self, x):
-        x = self.embedding(x)
+        # 1. Extract (64/8)*(400/8)=400 tokens from image and embed them into d=256 dim vectors
+        x = self.embedding(x)         # shape: [32, 1, 64, 401]->[32 Batch, 400 tokens, 256 embeding dimensions]
+        
         B = x.shape[0]
+
+        # 2. Adding a classification token (CLS) to each input in the batch (cls_token "summarizes" entire image)
         cls_token = self.cls_token.expand(B, -1, -1)
         x = torch.cat((cls_token, x), dim = 1)  # dim = 1 is rows (dim=0 is batch, dim = 2 are columns)
+        
+        # 3. Add positional encoding
         x = x + self.position_embedding
         x = x.contiguous()
+        
+        # 4. Run input through transformer encoder
         x = self.transformer_block(x)
+        
+        # 5. Continuing with only cls token of each batch element (cls_token is like a summary)
         x = x[:, 0].contiguous()  # meaning first row (cls token) of every datapoint in the batch
         x = self.mlp_head(x)
+        
+
         #reshape
-        x = x.view(-1,8,5)
-        x = torch.mean(x, dim=1)
+        #x = x.view(-1,8,5)
+        #print(f"hehe1.5: {x.shape}")
+        # Taking average prediction within each of the 5 diseases
+        #x = torch.mean(x, dim=1)
         
         #return torch.sigmoid(self.steepness * (x - self.threshhold))
         return x
@@ -130,8 +140,7 @@ class Transformer(nn.Module):
 
 
 def train_transformer(transformer, train_loader, val_loader, device, epochs = 150):
-    optimizer = optim.Adam(transformer.parameters(), lr = 1e-3, weight_decay=1e-5)
-    #weights = torch.tensor([0.1795, 0.1545, 0.1748, 0.1748, 0.3161]).to(device)
+    optimizer = optim.Adam(transformer.parameters(), lr = 5e-4, weight_decay=1e-5)
     weights = torch.tensor([1.9189189189189189, 1.5116279069767442, 1.8421052631578947, 1.8421052631578947, 4.142857142857143]).to(device)
     criterion_train = nn.BCEWithLogitsLoss(pos_weight=weights)
     criterion_val = nn.BCEWithLogitsLoss(pos_weight=weights)
@@ -156,7 +165,7 @@ def train_transformer(transformer, train_loader, val_loader, device, epochs = 15
             loss = criterion_train(preds, y) # loss = criterion_train(preds, y)
             train_loss += loss.item()
             optimizer.zero_grad()
-            loss.backward()
+            loss.backward(retain_graph=True)
             optimizer.step()
             
             total_train += (x.shape[0])
