@@ -24,7 +24,7 @@ def main():
         X_train, y_train, X_val, y_val, X_test, y_test = create_train_val_test_split(split, stride_splits, device, iteration)
         X_train_meta, X_val_meta, X_test_meta = create_simple(split, stride_splits, device, iteration)
         train_loader, val_loader, test_loader = loaders(X_train, y_train, X_val, y_val, X_test, y_test, X_train_meta, X_val_meta, X_test_meta)
-
+        
         # 1. Train Transformer alone
         transformer = Transformer(device).to(device)
         train_transformer(transformer, train_loader, val_loader, device, epochs = 150)

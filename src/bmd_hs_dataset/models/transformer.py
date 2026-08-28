@@ -6,6 +6,7 @@ import math
 import copy
 from bmd_hs_dataset.models.ANN import ANN
 from sklearn.metrics import f1_score
+from create_spectrorgrams import N_MELS
 
 
 num_channels = 1
@@ -20,8 +21,8 @@ patch size: 1 pixel in the spectrogram in horizontal direction corresponds to 50
 when generating the spectrograms, which corresponds at 4kHz sampling rate a hop of 50ms. patch_size of 8 mean 8*50ms,
 which is 400ms window --> transformer looks at frequency content of 400 ms)
 """
-patch_size = 8  # meaning sees 8 (8x8) pixels horizontally (in time) 1 pixel is 80000/200 = 400ms
-nr_tokens = ((401 - patch_size) // patch_size + 1) * ((64 - patch_size) // patch_size + 1)
+patch_size = 16                 # meaning sees 8 (8x8) pixels horizontally (in time) 1 pixel is 80000/200 = 400ms
+nr_tokens = ((401 - patch_size) // patch_size + 1) * ((N_MELS - patch_size) // patch_size + 1)
 
 # Embedding for raw audio timeseries --> very noisy
 
@@ -97,7 +98,6 @@ class MLP_Head(nn.Module):
 class Transformer(nn.Module):
     def __init__(self, device):
         super().__init__()
-        #self.embedding = PatchEmbedding(nr_windows)
         self.embedding = EmbeddingSpectograms()
         self.cls_token = nn.Parameter(torch.randn(1,1,embed_dim)).to(device)
         self.position_embedding = 0.02 * nn.Parameter(torch.randn(1, nr_tokens+1, embed_dim)).to(device)      # factor 0.02 for stability reasons
@@ -109,7 +109,6 @@ class Transformer(nn.Module):
     def forward(self, x):
         # 1. Extract (64/8)*(400/8)=400 tokens from image and embed them into d=256 dim vectors
         x = self.embedding(x)         # shape: [32, 1, 64, 401]->[32 Batch, 400 tokens, 256 embeding dimensions]
-        
         B = x.shape[0]
 
         # 2. Adding a classification token (CLS) to each input in the batch (cls_token "summarizes" entire image)

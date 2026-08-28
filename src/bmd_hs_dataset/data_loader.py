@@ -30,9 +30,9 @@ def loaders(X_train, y_train, X_val, y_val, X_test, y_test, Xs_train, Xs_val, Xs
     val_ds = TensorDataset(X_val.float(), Xs_val.float(), y_val.squeeze())
     test_ds = TensorDataset(X_test.float(), Xs_test.float(), y_test.squeeze())
     
-    train_loader = DataLoader(train_ds, batch_size=4, shuffle=True) # shuffle = True
-    val_loader = DataLoader(val_ds, batch_size=4, shuffle=False)
-    test_loader = DataLoader(test_ds, batch_size=4, shuffle=False)
+    train_loader = DataLoader(train_ds, batch_size=64, shuffle=True) # shuffle = True
+    val_loader = DataLoader(val_ds, batch_size=16, shuffle=False)
+    test_loader = DataLoader(test_ds, batch_size=16, shuffle=False)
 
     return train_loader, val_loader, test_loader
 
