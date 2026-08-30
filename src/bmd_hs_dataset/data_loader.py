@@ -184,6 +184,49 @@ def create_tensors_meta(pX_train, device, metadata):
 
     return X_train
 
+def time_freq_masking(X:torch.Tensor, y:torch.Tensor) -> tuple[torch.Tensor, torch.tensor]:
+    X_copy1 = X.clone()
+    X_copy2 = X.clone()
+
+    B,_,H,W = X.shape
+    nr_stripes_t = 5
+    stripe_width_t_min = 5
+    stripe_width_t_max = 10
+
+    # Time Masking
+    nr_stripes_t = 5
+    stripe_width_t_min = 5
+    stripe_width_t_max = 10
+    for mel_nr in range(B):
+        mel_spec = X_copy1[mel_nr, 0]
+        for _ in range(nr_stripes_t):
+            stripe_width = random.randint(stripe_width_t_min, stripe_width_t_max)
+            stripe_start_idx = random.randint(5, W - stripe_width_t_max - 1)
+
+            mel_spec[:, stripe_start_idx:(stripe_start_idx+stripe_width)] = 0.0
+
+        X_copy1[mel_nr, 0] = mel_spec
+
+    # Frequency Masking
+    nr_stripes_f = 3
+    stripe_width_f_min = 1
+    stripe_width_f_max = 5
+    for mel_nr in range(B):
+        mel_spec = X_copy2[mel_nr, 0]
+        for _ in range(nr_stripes_f):
+            stripe_width = random.randint(stripe_width_f_min, stripe_width_f_max)
+            stripe_start_idx = random.randint(5, H - stripe_width_f_max - 1)
+
+            mel_spec[stripe_start_idx:(stripe_start_idx+stripe_width), :] = 0.0
+
+        X_copy2[mel_nr, 0] = mel_spec
+
+    X = torch.cat((X, X_copy1, X_copy2), dim=0)
+    y = torch.cat((y, y, y), dim=0)
+
+    return X,y 
+
+
 def create_train_val_test_split(split: list[float], stride_splits: float, device: torch.device, 
                                 iteration: int)-> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     order, labels, metadata = create_order()
@@ -199,6 +242,9 @@ def create_train_val_test_split(split: list[float], stride_splits: float, device
     X_train, y_train = create_tensors_mel(pX_train, device, order, labels)
     X_val, y_val = create_tensors_mel(pX_val, device, order, labels)
     X_test, y_test = create_tensors_mel(pX_test, device, order, labels)
+
+    # Data augmentation
+    X_train, y_train = time_freq_masking(X_train, y_train)
 
     return X_train, y_train, X_val, y_val, X_test, y_test
 
@@ -216,6 +262,9 @@ def create_simple(split, stride_splits, device, iteration):
     X_train = create_tensors_meta(pX_train, device, metadata)
     X_val = create_tensors_meta(pX_val, device, metadata)
     X_test = create_tensors_meta(pX_test, device, metadata)
+
+    # Expand X_train_meta to same size as X_train carrying spectrograms (data augmentation from before)
+    X_train = torch.cat((X_train, X_train, X_train), dim=0)
 
     return X_train, X_val, X_test
 
