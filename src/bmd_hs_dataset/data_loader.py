@@ -93,7 +93,7 @@ def create_order() -> tuple[dict, dict, dict]:
     '''
     order, labels, metadata = {}, {}, {}
     train_csv = pd.read_csv(f"src/bmd_hs_dataset/data/train.csv")
-    meta_csv = number(pd.read_csv(f"src/bmd_hs_dataset/data/additional_metadata.csv")) # number is my own function which converts characters to 0/1
+    meta_csv = number(pd.read_csv(f"src/bmd_hs_dataset/data/additional_metadata.csv")) # number is function which converts characters to 0/1
 
     patients = train_csv["patient_id"].tolist()
     rec_names = train_csv.drop(["AS", "AR", "MR", "MS" ,"N"], axis=1)

@@ -8,7 +8,7 @@ import os
 output_dir = "src/bmd_hs_dataset/data/spectrograms"
 os.makedirs(output_dir, exist_ok=True)
 
-N_MELS = 256
+N_MELS = 128
 
 
 def create_spectrograms():

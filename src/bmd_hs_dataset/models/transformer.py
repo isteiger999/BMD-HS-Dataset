@@ -1,11 +1,11 @@
-import torch 
-import torch.nn as nn
-import torch.optim as optim
-import torch.nn.functional as F
+import torch # pyright: ignore[reportMissingImports]
+import torch.nn as nn # pyright: ignore[reportMissingImports]
+import torch.optim as optim # pyright: ignore[reportMissingImports]
+import torch.nn.functional as F # pyright: ignore[reportMissingImports]
 import math
 import copy
 from bmd_hs_dataset.models.ANN import ANN
-from sklearn.metrics import f1_score
+from sklearn.metrics import f1_score 
 from create_spectrorgrams import N_MELS
 
 
@@ -100,14 +100,37 @@ class Transformer(nn.Module):
         super().__init__()
         self.embedding = EmbeddingSpectograms()
         self.cls_token = nn.Parameter(torch.randn(1,1,embed_dim)).to(device)
-        self.position_embedding = 0.02 * nn.Parameter(torch.randn(1, nr_tokens+1, embed_dim)).to(device)      # factor 0.02 for stability reasons
+        #self.position_embedding = 0.02 * nn.Parameter(torch.randn(1, nr_tokens+1, embed_dim)).to(device)      # factor 0.02 for stability reasons
+        self.position_embedding = self.calc_pos_embed().to(device)
         self.transformer_block = nn.Sequential(*[TransformerEncoder() for _ in range(transformer_blocks)])
         self.mlp_head = MLP_Head()
         self.threshhold = nn.Parameter(torch.Tensor([0.5, 0.5, 0.5, 0.5, 0.5]))
         self.steepness = 1.5
-    
+
+    def calc_pos_embed(self) -> torch.Tensor:
+        '''
+        Calculate the fixed (not learnable) positional embedding the
+        tokens of each input.
+        Positional Embedding shape: (1, nr_tokens+1, embed_dim)
+        '''
+        pos_emb = []
+        for pos in range(nr_tokens+1):  # iterating through all 'rows'
+            pos_emb_per_token = []
+            for pair_nr in range(embed_dim // 2):
+                denominator = 10000 ** (2*pair_nr/embed_dim)
+                arg = torch.Tensor([pos/denominator]) 
+                pos_emb_per_token.append(torch.sin(arg))
+                pos_emb_per_token.append(torch.cos(arg))
+
+            pos_emb.append(torch.Tensor(pos_emb_per_token))
+
+        pos_emb = torch.stack(pos_emb)
+        pos_emb = pos_emb.unsqueeze(0)
+
+        return pos_emb
+
     def forward(self, x):
-        # 1. Extract (64/8)*(400/8)=400 tokens from image and embed them into d=256 dim vectors
+        # 1. Extract (128/8)*(400/8)=800 tokens from image and embed them into d=256 dim vectors
         x = self.embedding(x)         # shape: [32, 1, 64, 401]->[32 Batch, 400 tokens, 256 embeding dimensions]
         B = x.shape[0]
 
@@ -126,14 +149,6 @@ class Transformer(nn.Module):
         x = x[:, 0].contiguous()  # meaning first row (cls token) of every datapoint in the batch
         x = self.mlp_head(x)
         
-
-        #reshape
-        #x = x.view(-1,8,5)
-        #print(f"hehe1.5: {x.shape}")
-        # Taking average prediction within each of the 5 diseases
-        #x = torch.mean(x, dim=1)
-        
-        #return torch.sigmoid(self.steepness * (x - self.threshhold))
         return x
 
 
