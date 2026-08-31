@@ -21,11 +21,11 @@ def main():
     
     for iteration in range(iterations):
         # 1. Create X_train, X_val, X_test
-        # X_train.shape: [608, 1, 64, 401], y_train.shape: [608, 5]
+        # X_train.shape: [608, 1, H, W], y_train.shape: [608, 5]
         X_train, y_train, X_val, y_val, X_test, y_test = data_laoder.create_train_val_test_split(split, stride_splits, device, iteration)
         X_train_meta, X_val_meta, X_test_meta = data_laoder.create_simple(split, stride_splits, device, iteration)
         assert X_train.shape[0] == X_train_meta.shape[0], f"X_train.shape[0] {X_train.shape[0]} =! X_train_meta.shape[0] {X_train_meta.shape[0]}"
-
+        print(X_train.shape, X_val.shape, X_test.shape)
         train_loader, val_loader, test_loader = data_laoder.loaders(X_train, y_train, X_val, y_val, X_test, y_test, X_train_meta, X_val_meta, X_test_meta)
 
         # 3. Train Transformer alone

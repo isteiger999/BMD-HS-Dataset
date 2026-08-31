@@ -208,7 +208,7 @@ def time_freq_masking(X:torch.Tensor, y:torch.Tensor) -> tuple[torch.Tensor, tor
         X_copy1[mel_nr, 0] = mel_spec
 
     # Frequency Masking
-    nr_stripes_f = 3
+    nr_stripes_f = 5
     stripe_width_f_min = 1
     stripe_width_f_max = 5
     for mel_nr in range(B):
@@ -231,6 +231,7 @@ def create_train_val_test_split(split: list[float], stride_splits: float, device
                                 iteration: int)-> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     order, labels, metadata = create_order()
     patients = list(order.keys())
+    random.shuffle(patients)
     patients2 = patients + patients
 
     fract_train, fract_val, fract_test, stride  = calc_fractions(patients, stride_splits, split)
