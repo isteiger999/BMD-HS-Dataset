@@ -119,7 +119,7 @@ def train_lf(lf, device, train_loader, val_loader, epochs):
 
 
 
-def test_lf(lf, val_loader, device, metrics):
+def test_lf(lf, train_loader, val_loader, device, metrics):
     lf.eval()
     weights = torch.tensor([1.9189189189189189, 1.5116279069767442, 1.8421052631578947, 1.8421052631578947, 4.142857142857143]).to(device)
     criterion_val = nn.BCEWithLogitsLoss(pos_weight=weights)
@@ -149,9 +149,41 @@ def test_lf(lf, val_loader, device, metrics):
     val_acc = correct_val/total_val
     val_loss /= total_val
 
-    metrics["Final_loss"].append(val_loss)
-    metrics["Acc"].append(val_acc)
-    metrics["F1"].append(f1_val)
+    metrics["Final_loss_val"].append(val_loss)
+    metrics["Acc_val"].append(val_acc)
+    metrics["F1_val"].append(f1_val)
+
+
+    # Now do same for train_loader
+    criterion_train = nn.BCEWithLogitsLoss(pos_weight=weights)
+    total_train, correct_train = 0, 0
+    train_loss = 0
+    all_predst, all_labelst = [], []
+    with torch.no_grad():
+        for xv,xsv,yv in train_loader:
+            xv, xsv, yv = xv.to(device), xsv.to(device), yv.to(device)
+            pred = lf(xv, xsv)
+            # NO AVERAGING NEEDED IN LATE FUSION
+            lossv = criterion_train(pred, yv) 
+            train_loss += lossv.item()
+
+            y_predv = (torch.sigmoid(pred) > 0.5).int()
+            total_train += xv.shape[0]
+            for row in range(int(xv.shape[0])): 
+                correct_train += (y_predv[row, :] == yv[row, :]).float().mean().item() # bc. y_pred now only has one column
+
+            all_predst.append(y_predv.detach().cpu())
+            all_labelst.append(yv.detach().cpu())
+        
+    y_pred_mv = torch.cat(all_predst).numpy()
+    y_mv = torch.cat(all_labelst).numpy()
+    f1_train = f1_score(y_mv, y_pred_mv, average='macro')
+    train_acc = correct_train/total_train
+    train_loss /= total_train
+
+    metrics["Final_loss_train"].append(train_loss)
+    metrics["Acc_train"].append(train_acc)
+    metrics["F1_train"].append(f1_train)
 
     return metrics
 

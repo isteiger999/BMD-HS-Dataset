@@ -5,6 +5,7 @@ import math
 from torch.utils.data import DataLoader, TensorDataset
 import matplotlib.pyplot as plt
 from scipy import signal
+import torchaudio
 import random
 
 def ensure_deterministic():
@@ -46,20 +47,32 @@ def calc_mean_std(list):
     variance = sum(squared_diffs) / length
     std = np.sqrt(variance)
 
-    return mean, std
+    return round(mean, 3), round(std, 3)
 
 def mean_std(metrics):
-    list_loss = metrics["Final_loss"]
-    list_acc = metrics["Acc"]
-    list_f1 = metrics["F1"]
+    list_loss_v = metrics["Final_loss_val"]
+    list_acc_v = metrics["Acc_val"]
+    list_f1_v = metrics["F1_val"]
 
-    mu_loss, std_loss = calc_mean_std(list_loss)
-    mu_acc, std_acc = calc_mean_std(list_acc)
-    mu_f1, std_f1 = calc_mean_std(list_f1)
+    mu_loss, std_loss = calc_mean_std(list_loss_v)
+    mu_acc, std_acc = calc_mean_std(list_acc_v)
+    mu_f1, std_f1 = calc_mean_std(list_f1_v)
 
-    print(f"Final Loss: {mu_loss}\u00B1{std_loss}")
-    print(f"Final Acc: {mu_acc}\u00B1{std_acc}")
-    print(f"Final F1: {mu_f1}\u00B1{std_f1}")
+    print(f"(VAL) Final Loss: {mu_loss}\u00B1{std_loss}")
+    print(f"(VAL) Final Acc: {mu_acc}\u00B1{std_acc}")
+    print(f"(VAL) Final F1: {mu_f1}\u00B1{std_f1}")
+
+    list_loss_t = metrics["Final_loss_train"]
+    list_acc_t = metrics["Acc_train"]
+    list_f1_t = metrics["F1_train"]
+
+    mu_loss, std_loss = calc_mean_std(list_loss_t)
+    mu_acc, std_acc = calc_mean_std(list_acc_t)
+    mu_f1, std_f1 = calc_mean_std(list_f1_t)
+
+    print(f"(TRAIN) Final Loss: {mu_loss}\u00B1{std_loss}")
+    print(f"(TRAIN) Final Acc: {mu_acc}\u00B1{std_acc}")
+    print(f"(TRAIN) Final F1: {mu_f1}\u00B1{std_f1}")
 
 
 def fix_length(wav_file):
@@ -153,25 +166,26 @@ def plot_spectrogram(spectogram_tensor, patient):
     plt.show()
 
 def create_tensors_mel(pX_train: list[str], device: torch.device, 
-                       order: dict[str, list[str]], 
-                       labels: dict[str, list[int]])-> tuple[torch.Tensor, torch.Tensor]:
+                       order: dict[str, list[str]], labels: dict[str, list[int]],
+                       )-> tuple[torch.Tensor, torch.Tensor]:
     nr_recording_per_patient = 8
     spec = torch.load('src/bmd_hs_dataset/data/spectrograms/AR_016_sit_Aor.pt', weights_only=True)
     height = spec.shape[0]              # 128
     width = spec.shape[1]               # 401
 
-    X_train = torch.zeros([len(pX_train)*nr_recording_per_patient, 1, height, width], dtype=torch.float32, device=device)
-    y_train = torch.zeros([len(pX_train)*nr_recording_per_patient, 5], dtype=torch.float32, device=device)
+    X = torch.zeros([len(pX_train)*nr_recording_per_patient, 1, height, width], dtype=torch.float32, device=device)
+    y = torch.zeros([len(pX_train)*nr_recording_per_patient, 5], dtype=torch.float32, device=device)
     for num, patient in enumerate(pX_train):
         rec8 = order[patient]           # a list of the 8 recording names (strings)
         disease5 = labels[patient]      # a list of 4 integers (diseases)
         for idx, rec in enumerate(rec8):
             spectogram_tensor = torch.load(f"src/bmd_hs_dataset/data/spectrograms/{rec}.pt", weights_only=True)
-            X_train[num+idx, 0] = spectogram_tensor
-            y_train[num+idx, :] = torch.Tensor(np.array(disease5))
+            row_idx = num * nr_recording_per_patient + idx
+            X[row_idx, 0] = spectogram_tensor
+            y[row_idx, :] = torch.tensor(disease5, dtype=torch.float32, device=device)
             #plot_spectrogram(spectogram_tensor, patient)
 
-    return X_train, y_train
+    return X, y
 
 def create_tensors_meta(pX_train, device, metadata):
     recording_per_patient = 8
@@ -179,7 +193,9 @@ def create_tensors_meta(pX_train, device, metadata):
 
     for num, patient in enumerate(pX_train):
         meta4 = metadata[patient]           # a list of the 4 integers (metadata)
-        X_train[num:num+recording_per_patient] = torch.Tensor(np.array(meta4))
+        start_idx = num * recording_per_patient
+        end_idx = start_idx + recording_per_patient
+        X_train[start_idx:end_idx] = torch.tensor(meta4, dtype=torch.float32, device=device)
 
 
     return X_train
@@ -189,14 +205,11 @@ def time_freq_masking(X:torch.Tensor, y:torch.Tensor) -> tuple[torch.Tensor, tor
     X_copy2 = X.clone()
 
     B,_,H,W = X.shape
-    nr_stripes_t = 5
-    stripe_width_t_min = 5
-    stripe_width_t_max = 10
 
     # Time Masking
-    nr_stripes_t = 5
-    stripe_width_t_min = 5
-    stripe_width_t_max = 10
+    nr_stripes_t = 6
+    stripe_width_t_min = 10
+    stripe_width_t_max = 30
     for mel_nr in range(B):
         mel_spec = X_copy1[mel_nr, 0]
         for _ in range(nr_stripes_t):
@@ -208,9 +221,9 @@ def time_freq_masking(X:torch.Tensor, y:torch.Tensor) -> tuple[torch.Tensor, tor
         X_copy1[mel_nr, 0] = mel_spec
 
     # Frequency Masking
-    nr_stripes_f = 5
-    stripe_width_f_min = 1
-    stripe_width_f_max = 5
+    nr_stripes_f = 6
+    stripe_width_f_min = 4
+    stripe_width_f_max = 8
     for mel_nr in range(B):
         mel_spec = X_copy2[mel_nr, 0]
         for _ in range(nr_stripes_f):
@@ -226,11 +239,32 @@ def time_freq_masking(X:torch.Tensor, y:torch.Tensor) -> tuple[torch.Tensor, tor
 
     return X,y 
 
+def normalize_data(X_train:torch.Tensor, X_val:torch.Tensor, X_test:torch.Tensor,
+                   amp_to_db:torchaudio.transforms.AmplitudeToDB)->tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+
+    # (1) Normalization: apply log
+    X_train = amp_to_db(X_train)        # shape: [608, 1, 128, 401]
+    X_val = amp_to_db(X_val)
+    X_test = amp_to_db(X_test)
+    
+    # (2) Normalization: apply mean, std
+    mean = X_train.mean()
+    std = X_train.std()
+
+    eps = 1e-6
+    X_train = (X_train - mean) / (std + eps)
+    X_val = (X_val - mean) / (std + eps)
+    X_test = (X_test - mean) / (std + eps)
+
+    return X_train, X_val, X_test
+    
+
 
 def create_train_val_test_split(split: list[float], stride_splits: float, device: torch.device, 
                                 iteration: int)-> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     order, labels, metadata = create_order()
     patients = list(order.keys())
+    # Important: random shuffle must be done before creating concatenated list 'patients2'
     random.shuffle(patients)
     patients2 = patients + patients
 
@@ -243,6 +277,10 @@ def create_train_val_test_split(split: list[float], stride_splits: float, device
     X_train, y_train = create_tensors_mel(pX_train, device, order, labels)
     X_val, y_val = create_tensors_mel(pX_val, device, order, labels)
     X_test, y_test = create_tensors_mel(pX_test, device, order, labels)
+
+    # Data Normalization
+    amp_to_db = torchaudio.transforms.AmplitudeToDB(stype='power', top_db = 80)
+    X_train, X_val, X_test = normalize_data(X_train, X_val, X_test, amp_to_db)
 
     # Data augmentation
     X_train, y_train = time_freq_masking(X_train, y_train)

@@ -59,12 +59,12 @@ class TransformerEncoder(nn.Module):
         super().__init__()
         self.ln1 = nn.LayerNorm(embed_dim)
         self.multi_head_attention = nn.MultiheadAttention(embed_dim, attention_heads, batch_first=True) # batch_first=False
-        self.dropout = nn.Dropout(p=0.1)
+        self.dropout = nn.Dropout(p=0.2)
         self.ln2 = nn.LayerNorm(embed_dim)
         self.mlp = nn.Sequential(
             nn.Linear(embed_dim, mlp_nodes),
             nn.GELU(),
-            nn.Dropout(p=0.1),
+            nn.Dropout(p=0.2),
             nn.Linear(mlp_nodes, embed_dim)
         )
 
@@ -82,7 +82,7 @@ class MLP_Head(nn.Module):
     def __init__(self):
         super().__init__()
         self.ln1 = nn.LayerNorm(embed_dim)          # takes in cls token only
-        self.dropout = nn.Dropout(p=0.1)
+        self.dropout = nn.Dropout(p=0.2)
         self.fc1 = nn.Linear(embed_dim, mlp_nodes)
         self.fc2 = nn.Linear(mlp_nodes, mlp_nodes)
         self.fc3 = nn.Linear(mlp_nodes, num_classes)
