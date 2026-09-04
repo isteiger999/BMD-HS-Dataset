@@ -11,7 +11,7 @@ from create_spectrorgrams import N_MELS
 
 num_channels = 1
 num_recordings = 8
-embed_dim = 256
+embed_dim = 128
 num_classes = 5
 attention_heads = 4
 transformer_blocks = 4 #6

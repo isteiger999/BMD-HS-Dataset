@@ -17,12 +17,10 @@ class ANN(nn.Module):
             nn.Dropout(p=0.3),
             nn.Linear(128,n_classes)
         )
-        self.threshhold = nn.Parameter(torch.Tensor([0.5, 0.5, 0.5, 0.5, 0.5]))
-        self.steepness = 10
     
     def forward(self, x):
         meta_logits = self.mlp(x)
-        return meta_logits #torch.sigmoid(self.steepness*(meta_logits - self.threshhold))
+        return meta_logits 
     
 def train_ann(ann, device, train_loader, val_loader, epochs):
     optimizer = optim.Adam(ann.parameters(), lr = 1e-3, weight_decay=1e-5)

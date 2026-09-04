@@ -14,18 +14,20 @@ class LateFusion(nn.Module):
         self.transformer = transformer
         self.ann = ann
 
-        self.lf1 = nn.Linear(2*n_classes, n_classes)
-        #self.lf2 = nn.Linear(2*n_classes, n_classes)
-        self.threshhold = nn.Parameter(torch.Tensor([0.5, 0.5, 0.5, 0.5, 0.5]))
-        self.steepness = 10
+        #self.lf1 = nn.Linear(2*n_classes, n_classes)
+        self.mlp = nn.Sequential(
+            nn.Linear(2*n_classes, 64),
+            nn.ReLU(),
+            nn.Dropout(p=0.2),
+            nn.Linear(64, n_classes)
+        )
 
     def forward(self, audio_data, meta_data):
         audio_logits = self.transformer(audio_data)
         meta_logits = self.ann(meta_data)
 
         concat = torch.concat([audio_logits, meta_logits], dim=1)   # dim 0 = batch, dim 1 = rows, dim = 2 columns
-        #h = F.relu(self.lf1(concat))
-        output = self.lf1(concat)
+        output = self.mlp(concat)
         return output
 
    
