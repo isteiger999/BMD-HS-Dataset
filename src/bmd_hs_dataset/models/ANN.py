@@ -12,10 +12,10 @@ class ANN(nn.Module):
     def __init__(self):
         super().__init__()
         self.mlp = nn.Sequential(
-            nn.Linear(4, 128),
+            nn.Linear(4, 64),
             nn.ReLU(),
-            nn.Dropout(p=0.3),
-            nn.Linear(128,n_classes)
+            nn.Dropout(p=0.2),
+            nn.Linear(64,n_classes)
         )
     
     def forward(self, x):

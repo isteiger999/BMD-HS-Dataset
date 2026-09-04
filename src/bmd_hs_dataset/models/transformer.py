@@ -15,7 +15,7 @@ embed_dim = 128
 num_classes = 5
 attention_heads = 4
 transformer_blocks = 4 #6
-mlp_nodes = 512
+mlp_nodes = 256
 """
 patch size: 1 pixel in the spectrogram in horizontal direction corresponds to 50 ms (since we used hop_length=200pixels
 when generating the spectrograms, which corresponds at 4kHz sampling rate a hop of 50ms. patch_size of 8 mean 8*50ms,
