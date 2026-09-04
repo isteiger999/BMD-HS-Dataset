@@ -207,9 +207,9 @@ def time_freq_masking(X:torch.Tensor, y:torch.Tensor) -> tuple[torch.Tensor, tor
     B,_,H,W = X.shape
 
     # Time Masking
-    nr_stripes_t = 6
+    nr_stripes_t = 10
     stripe_width_t_min = 10
-    stripe_width_t_max = 30
+    stripe_width_t_max = 40
     for mel_nr in range(B):
         mel_spec = X_copy1[mel_nr, 0]
         for _ in range(nr_stripes_t):
@@ -221,7 +221,7 @@ def time_freq_masking(X:torch.Tensor, y:torch.Tensor) -> tuple[torch.Tensor, tor
         X_copy1[mel_nr, 0] = mel_spec
 
     # Frequency Masking
-    nr_stripes_f = 6
+    nr_stripes_f = 10
     stripe_width_f_min = 4
     stripe_width_f_max = 8
     for mel_nr in range(B):
